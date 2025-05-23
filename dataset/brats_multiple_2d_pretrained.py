@@ -48,11 +48,15 @@ class BraTS2021Dataset:
                     f"Modality {mod} for sample {sample} does not exist.")
 
             img = nifti1.load(mod_path)
-            if self.normalize_params[sample_idx].get(mod, None) is None:
-                data = img.get_fdata(dtype=np.float32)
-                vmax = np.max(data)
-                vmin = np.min(data)
-                self.normalize_params[sample_idx][mod] = (vmin, vmax)
+            try:
+                if self.normalize_params[sample_idx].get(mod, None) is None:
+                    data = img.get_fdata(dtype=np.float32)
+                    vmax = np.max(data)
+                    vmin = np.min(data)
+                    self.normalize_params[sample_idx][mod] = (vmin, vmax)
+            except Exception as e:
+                print(f"Error loading {mod_path}: {e}")
+                continue
 
             img_slice = img.dataobj[:, :, slice_idx]
             vmin, vmax = self.normalize_params[sample_idx][mod]

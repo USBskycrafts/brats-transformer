@@ -9,9 +9,9 @@ from monai.losses.perceptual import PerceptualLoss
 from monai.metrics.regression import MultiScaleSSIMMetric as mSSIM
 from monai.metrics.regression import PSNRMetric as PSNR
 from monai.networks.layers.factories import Act
-from monai.networks.nets.patchgan_discriminator import \
-    PatchDiscriminator
-from monai.networks.nets.vqvae import VQVAE
+from monai.networks.nets.patchgan_discriminator import PatchDiscriminator
+
+from .modules import VQVAE
 
 
 class VQGAN(pl.LightningModule):
@@ -135,9 +135,9 @@ class VQGAN(pl.LightningModule):
         self.log('train/p_loss', percetual_loss, on_step=True,
                  on_epoch=True, prog_bar=False)
         self.log('train/loss_fake', loss_d_fake, on_step=True,
-                 on_epoch=True, prog_bar=True)
+                 on_epoch=True, prog_bar=False)
         self.log('train/loss_real', loss_d_real, on_step=True,
-                 on_epoch=True, prog_bar=True)
+                 on_epoch=True, prog_bar=False)
 
         return {
             'input': x,

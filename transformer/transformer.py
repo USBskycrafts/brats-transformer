@@ -10,7 +10,7 @@ class ContrastGenerationTransformer(nn.Module):
     def __init__(self,
                  in_channels: int,
                  img_size: Sequence[int] | int,
-                 spatial_dim: int = 3,
+                 spatial_dims: int = 3,
                  num_contrast: int = 4,
                  hidden_size: int = 512,
                  mlp_dim: int = 2048,
@@ -24,10 +24,10 @@ class ContrastGenerationTransformer(nn.Module):
         self.patch_embed = PatchEmbeddingBlock(
             in_channels=in_channels,
             img_size=img_size,
-            patch_size=(1, 1) if spatial_dim == 2 else (1, 1, 1),
+            patch_size=(1, 1) if spatial_dims == 2 else (1, 1, 1),
             hidden_size=hidden_size,
             num_heads=num_heads,
-            spatial_dims=spatial_dim,
+            spatial_dims=spatial_dims,
         )
 
         self.encoder = nn.TransformerEncoder(
@@ -43,9 +43,9 @@ class ContrastGenerationTransformer(nn.Module):
             enable_nested_tensor=False
         )
 
-        self.contrast_embeding = nn.Embedding(
-            num_embeddings=num_contrast,
-            embedding_dim=hidden_size
+        self.contrast_embeding = nn.Parameter(
+            torch.randn(num_contrast, hidden_size),
+            requires_grad=True
         )
 
         self.out_proj = nn.Linear(hidden_size, num_embeddings)
@@ -63,7 +63,9 @@ class ContrastGenerationTransformer(nn.Module):
         n = features[-1].shape[1]
 
         features = torch.cat(features, dim=1)
-        contrast = self.contrast_embeding(contrast).repeat(1, n, 1)
-        features = torch.cat([features, contrast], dim=1)
+        contrast = self.contrast_embeding[contrast]
+        required = torch.zeros_like(
+            features[:, -n:, :], device=features.device)
+        features = torch.cat([features, contrast, required], dim=1)
 
         return self.out_proj(self.encoder(features)[:, -n:, :])

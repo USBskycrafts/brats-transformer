@@ -12,7 +12,7 @@ class TestTransformer(unittest.TestCase):
             img_size=(12, 12),
             num_contrast=4,
             num_embeddings=128,
-            spatial_dim=2
+            spatial_dims=2
         )
 
     def test_forward(self):
@@ -31,7 +31,7 @@ class Test3DTransformer(unittest.TestCase):
             img_size=(12, 12, 12),
             num_contrast=4,
             num_embeddings=128,
-            spatial_dim=3
+            spatial_dims=3
         )
 
     def test_forward(self):

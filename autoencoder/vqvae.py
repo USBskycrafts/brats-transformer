@@ -149,6 +149,7 @@ class VQGAN(pl.LightningModule):
         x = batch.to(self.device)
         x_recon, _ = self.vqvae(x)
 
+        x_recon = x_recon.clamp(-1, 1)
         psnr = PSNR(max_val=2)(x, x_recon)
         ssim = mSSIM(self.hparams.get('spatial_dims', 2),
                      data_range=2)(x, x_recon)
@@ -172,6 +173,7 @@ class VQGAN(pl.LightningModule):
         x = batch.to(self.device)
         x_recon, _ = self.vqvae(x)
 
+        x_recon = x_recon.clamp(-1, 1)
         psnr = PSNR(max_val=2)(x, x_recon)
         ssim = mSSIM(self.hparams.get('spatial_dims', 2),
                      data_range=2)(x, x_recon)

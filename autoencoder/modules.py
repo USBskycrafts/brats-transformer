@@ -311,7 +311,8 @@ class Decoder(nn.Module):
                     norm=("GROUP", {"num_groups": 32}),
                     dilation=self.upsample_parameters[i][2],
                     conv_only=i == len(self.channels) - 1,
-                    is_transposed=True,
+                    is_transposed=True if i != len(
+                        self.channels) - 1 else False,
                     padding=self.upsample_parameters[i][3],
                     output_padding=self.upsample_parameters[i][4],
                 )

@@ -22,10 +22,10 @@ class MultiContrastGenerationInferer(nn.Module):
         with torch.no_grad():
             for img in imgs:
                 features.append(vqvae.encoder(img))
+            indices = vqvae.index_quantize(target)
+            indices = indices.flatten(1)
         # y is a logits tensor
         y = transformer(features, contrasts)
-        indices = vqvae.index_quantize(target)
-        indices = indices.flatten(1)
         loss = self.loss(y.transpose(1, -1), indices)
         return loss, y, indices
 
@@ -48,8 +48,11 @@ class MultiContrastGenerationInferer(nn.Module):
         if len(spatial_shape) == 2:
             h, w = spatial_shape
             indices = rearrange(indices, 'b (h w) -> b h w', h=h, w=w)
-        else:
+        elif len(spatial_shape) == 3:
             d, h, w = spatial_shape
             indices = rearrange(indices, 'b (d h w) -> b d h w', d=d, h=h, w=w)
+        else:
+            raise ValueError(
+                f"Unsupported spatial shape: {spatial_shape}, expected 2D or 3D tensor.")
         target = vqvae.decode_samples(indices)
         return target

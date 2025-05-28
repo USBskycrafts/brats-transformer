@@ -64,8 +64,8 @@ class ContrastGenerationTransformer(nn.Module):
 
         features = torch.cat(features, dim=1)
         contrast = self.contrast_embeding[contrast]
-        required = torch.zeros_like(
-            features[:, -n:, :], device=features.device)
+        required = torch.zeros_like(imgs[-1], device=features.device)
+        required = self.patch_embed(required)
         features = torch.cat([features, contrast, required], dim=1)
 
         return self.out_proj(self.encoder(features)[:, -n:, :])

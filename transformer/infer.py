@@ -21,7 +21,7 @@ class MultiContrastGenerationInferer(nn.Module):
         features = []
         with torch.no_grad():
             for img in imgs:
-                features.append(vqvae.encoder(img))
+                features.append(vqvae.encode_stage_2_inputs(img))
             indices = vqvae.index_quantize(target)
             indices = indices.flatten(1)
         # y is a logits tensor
@@ -39,7 +39,7 @@ class MultiContrastGenerationInferer(nn.Module):
                ):
         features = []
         for img in imgs:
-            features.append(vqvae.encoder(img))
+            features.append(vqvae.encode_stage_2_inputs(img))
         # y is a logits tensor
         spatial_shape = features[0].shape[2:]
         y = transformer(features, contrasts)

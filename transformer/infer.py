@@ -9,7 +9,7 @@ from einops import rearrange
 class MultiContrastGenerationInferer(nn.Module):
     def __init__(self):
         super().__init__()
-        self.loss = nn.CrossEntropyLoss()
+        self.loss = nn.CrossEntropyLoss(label_smoothing=0.1)
 
     def forward(self,
                 imgs,

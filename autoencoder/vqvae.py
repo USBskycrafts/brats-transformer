@@ -42,6 +42,7 @@ class VQGAN(pl.LightningModule):
                  act: tuple | str | None = "SWISH",
                  adv_weight: float = 0.01,
                  perceptual_weight: float = 0.1,
+                 commitment_cost: float = 0.25,
                  lr=1e-4
                  ):
         super().__init__()
@@ -57,6 +58,7 @@ class VQGAN(pl.LightningModule):
             upsample_parameters=upsample_parameters,
             num_embeddings=num_embeddings,
             embedding_dim=embedding_dim,
+            commitment_cost=commitment_cost,
             act=act,
         )
 

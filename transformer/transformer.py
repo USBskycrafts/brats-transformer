@@ -43,25 +43,12 @@ class ContrastGenerationTransformer(nn.Module):
             enable_nested_tensor=False
         )
 
-        self.decoder = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(
-                d_model=hidden_size,
-                nhead=num_heads,
-                dim_feedforward=mlp_dim,
-                dropout=0.1,
-                activation='gelu',
-                norm_first=True,
-            ),
-            num_layers=num_layers,
-            enable_nested_tensor=False
-        )
-
-        self.contrast_embeding = nn.Parameter(
+        self.contrast_embed = nn.Parameter(
             torch.randn(num_contrast, hidden_size),
             requires_grad=True
         )
 
-        self.generated_embedding = nn.Parameter(
+        self.generated_embed = nn.Parameter(
             torch.randn(torch.prod(torch.tensor(img_size)), hidden_size),
             requires_grad=True
         )
@@ -80,14 +67,12 @@ class ContrastGenerationTransformer(nn.Module):
             features.append(self.patch_embed(img))
         n = features[-1].shape[1]
         features = torch.cat(features, dim=1)
-        features = self.encoder(features)
-
-        contrast = self.contrast_embeding[contrast]
-        generated_embedding = self.generated_embedding.unsqueeze(0).expand(
+        contrast = self.contrast_embed[contrast]
+        generated_embedding = self.generated_embed.unsqueeze(0).expand(
             features.shape[0], -1, -1
         )
 
-        features = self.decoder(
+        features = self.encoder(
             torch.cat([features, contrast, generated_embedding], dim=1)
         )
         return self.out_proj(features[:, -n:, :])

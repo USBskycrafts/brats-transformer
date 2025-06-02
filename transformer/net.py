@@ -41,6 +41,7 @@ class ContrastGeneration(pl.LightningModule):
                  embedding_dim: int = 3,
                  act: tuple | str | None = "SWISH",
                  num_contrast: int = 4,
+                 patch_size: int = 2,
                  hidden_size: int = 512,
                  mlp_dim: int = 2048,
                  num_layers: int = 12,
@@ -82,6 +83,7 @@ class ContrastGeneration(pl.LightningModule):
             spatial_dims=spatial_dims,
             num_contrast=num_contrast,
             hidden_size=hidden_size,
+            patch_size=patch_size,
             mlp_dim=mlp_dim,
             num_layers=num_layers,
             num_heads=num_heads,
@@ -177,9 +179,10 @@ class ContrastGeneration(pl.LightningModule):
         }
 
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(
+        optimizer = torch.optim.Adam(
             self.transformer.parameters(),
             lr=self.hparams.get('lr', 1.0e-4),
+            betas=(0.9, 0.95)
         )
         return [optimizer], []
     # -------------------------------------------------------------------

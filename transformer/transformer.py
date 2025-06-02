@@ -1,9 +1,11 @@
 from typing import Sequence
 
+import numpy as np
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
 from monai.networks.blocks.patchembedding import PatchEmbeddingBlock
+from einops import rearrange
 
 
 class ContrastGenerationTransformer(nn.Module):
@@ -12,6 +14,7 @@ class ContrastGenerationTransformer(nn.Module):
                  img_size: Sequence[int] | int,
                  spatial_dims: int = 3,
                  num_contrast: int = 4,
+                 patch_size:  int = 2,
                  hidden_size: int = 512,
                  mlp_dim: int = 2048,
                  num_layers: int = 12,
@@ -20,14 +23,18 @@ class ContrastGenerationTransformer(nn.Module):
                  ):
 
         super().__init__()
+        self.patch_size = patch_size
+        self.spatial_dims = spatial_dims
 
         self.patch_embed = PatchEmbeddingBlock(
             in_channels=in_channels,
             img_size=img_size,
-            patch_size=(1, 1) if spatial_dims == 2 else (1, 1, 1),
+            patch_size=(patch_size, ) * spatial_dims,
             hidden_size=hidden_size,
             num_heads=num_heads,
             spatial_dims=spatial_dims,
+            proj_type='perceptron',
+            pos_embed_type='sincos',
         )
 
         self.encoder = nn.TransformerEncoder(
@@ -53,7 +60,10 @@ class ContrastGenerationTransformer(nn.Module):
             requires_grad=True
         )
 
-        self.out_proj = nn.Linear(hidden_size, num_embeddings)
+        self.out_proj = nn.Sequential(
+            nn.LayerNorm(hidden_size),
+            nn.Linear(hidden_size, num_embeddings * (patch_size ** spatial_dims)) 
+        )
 
     def forward(self, imgs: Sequence[torch.Tensor], contrast: torch.Tensor):
         """
@@ -75,4 +85,24 @@ class ContrastGenerationTransformer(nn.Module):
         features = self.encoder(
             torch.cat([features, contrast, generated_embedding], dim=1)
         )
-        return self.out_proj(features[:, -n:, :])
+        output_tokens =  self.out_proj(features[:, -n:, :])
+        if self.spatial_dims == 2:
+            output_shape = f'b h (c ph pw) -> b (h ph pw) c' 
+            output_images = rearrange(
+                output_tokens,
+                output_shape,
+                ph=self.patch_size,
+                pw=self.patch_size
+            )
+        elif self.spatial_dims == 3:
+            output_shape = f'b h (c ph pw pd) -> b (h ph pw pd) c'
+            output_images = rearrange(
+                output_tokens,
+                output_shape,
+                ph=self.patch_size,
+                pw=self.patch_size,
+                pd=self.patch_size
+            )
+        else:
+            raise ValueError(f"Unsupported spatial dimensions: {self.spatial_dims}")
+        return output_images

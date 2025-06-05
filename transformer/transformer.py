@@ -45,6 +45,7 @@ class ContrastGenerationTransformer(nn.Module):
                 dropout=0.1,
                 activation='gelu',
                 norm_first=True,
+                batch_first=True
             ),
             num_layers=num_layers,
             enable_nested_tensor=False

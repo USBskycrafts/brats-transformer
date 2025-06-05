@@ -70,9 +70,9 @@ class BraTS2021Dataset:
 
         # noise = torch.rand_like(torch.tensor(
         #     len(self.modalites), dtype=torch.int32))
-        noise = torch.randint(0, len(self.modalites), (len(self.modalites), ))
-        idx_chosen = torch.argsort(noise)
-
+        # noise = torch.randint(0, len(self.modalites), (len(self.modalites), ))
+        # idx_chosen = torch.argsort(noise)
+        idx_chosen = torch.randperm(len(self.modalites))
         input_modalities = idx_chosen[:(len(self.modalites) - 1)]
         target_modalities = idx_chosen[(len(self.modalites) - 1):]
 

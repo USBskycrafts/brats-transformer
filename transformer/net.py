@@ -10,7 +10,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from autoencoder.modules import VQVAE
 from transformer.infer import MultiContrastGenerationInferer
 from transformer.transformer import ContrastGenerationTransformer
-
+import pytorch_optimizer
 
 class ContrastGeneration(pl.LightningModule):
     def __init__(self,
@@ -121,9 +121,9 @@ class ContrastGeneration(pl.LightningModule):
             self.transformer
         )
 
-        psnr = PSNR(max_val=1.0)(generated, target)
+        psnr = PSNR(max_val=2.0)(generated, target)
         ssim = SSIM(spatial_dims=self.hparams.get('spatial_dims', 2),
-                    data_range=1.0)(generated, target)
+                    data_range=2.0)(generated, target)
         lpips = LPIPS(
             spatial_dims=self.hparams.get('spatial_dims', 2)
         ).to(self.device)(generated, target)
@@ -155,10 +155,10 @@ class ContrastGeneration(pl.LightningModule):
         )
 
         # 计算PSNR
-        psnr = PSNR(max_val=1.0)(generated, target)
+        psnr = PSNR(max_val=2.0)(generated, target)
         # 计算SSIM
         ssim = SSIM(spatial_dims=self.hparams.get('spatial_dims', 2),
-                    data_range=1.0)(generated, target)
+                    data_range=2.0)(generated, target)
         lpips = LPIPS(
             spatial_dims=self.hparams.get('spatial_dims', 2)
         ).to(self.device)(generated, target)
@@ -179,10 +179,9 @@ class ContrastGeneration(pl.LightningModule):
         }
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(
+        optimizer = pytorch_optimizer.Lamb(
             self.transformer.parameters(),
             lr=self.hparams.get('lr', 1.0e-4),
-            betas=(0.9, 0.95)
         )
         return [optimizer], []
     # -------------------------------------------------------------------

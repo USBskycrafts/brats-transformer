@@ -44,7 +44,7 @@ class MultiContrastGenerationInferer(nn.Module):
         spatial_shape = features[0].shape[2:]
         y = transformer(features, contrasts)
         # using gumbel softmax to sample
-        indices = torch.argmax(F.softmax(y, dim=-1), dim=-1)
+        indices = torch.argmax(y, dim=-1)
         if len(spatial_shape) == 2:
             h, w = spatial_shape
             indices = rearrange(indices, 'b (h w) -> b h w', h=h, w=w)

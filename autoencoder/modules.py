@@ -20,7 +20,8 @@ from einops import rearrange
 
 from monai.networks.blocks.convolutions import Convolution
 from monai.networks.layers.factories import Act
-from monai.networks.layers.vector_quantizer import EMAQuantizer, VectorQuantizer
+# from monai.networks.layers.vector_quantizer import EMAQuantizer, VectorQuantizer
+from autoencoder.quantizer import FiniteScalarQuantizer
 from monai.utils.misc import ensure_tuple_rep
 
 __all__ = ["VQVAE"]
@@ -378,17 +379,12 @@ class VQVAE(nn.Module):
             (2, 4, 1, 1, 0),
             (2, 4, 1, 1, 0),
         ),
-        num_embeddings: int = 32,
         embedding_dim: int = 64,
-        embedding_init: str = "normal",
-        commitment_cost: float = 0.25,
-        decay: float = 0.5,
-        epsilon: float = 1e-5,
         dropout: float = 0.0,
         act: tuple | str | None = Act.RELU,
         output_act: tuple | str | None = None,
-        ddp_sync: bool = True,
         use_checkpointing: bool = False,
+        levels: Sequence[int] = [8, 8, 8, 6, 5]
     ):
         super().__init__()
 
@@ -396,7 +392,6 @@ class VQVAE(nn.Module):
         self.out_channels = out_channels
         self.spatial_dims = spatial_dims
         self.channels = channels
-        self.num_embeddings = num_embeddings
         self.embedding_dim = embedding_dim
         self.use_checkpointing = use_checkpointing
 
@@ -483,17 +478,10 @@ class VQVAE(nn.Module):
             output_act=output_act,
         )
 
-        self.quantizer = VectorQuantizer(
-            quantizer=EMAQuantizer(
-                spatial_dims=spatial_dims,
-                num_embeddings=num_embeddings,
-                embedding_dim=embedding_dim,
-                commitment_cost=commitment_cost,
-                decay=decay,
-                epsilon=epsilon,
-                embedding_init=embedding_init,
-                ddp_sync=ddp_sync,
-            )
+        assert len(levels) == embedding_dim
+        self.quantizer = FiniteScalarQuantizer(
+            spatial_dims=spatial_dims,
+            levels=levels,
         )
 
     def encode(self, images: torch.Tensor) -> torch.Tensor:

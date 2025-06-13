@@ -37,12 +37,11 @@ class VQGAN(pl.LightningModule):
                      (2, 4, 1, 1, 0),
                      (1, 7, 1, 3, 0),
                  ),
-                 num_embeddings: int = 1024,
+                 levels: Sequence[int] = [8, 8, 8, 6, 5],
                  embedding_dim: int = 3,
                  act: tuple | str | None = "SWISH",
                  adv_weight: float = 0.01,
                  perceptual_weight: float = 0.1,
-                 commitment_cost: float = 0.25,
                  lr=1e-4
                  ):
         super().__init__()
@@ -56,9 +55,8 @@ class VQGAN(pl.LightningModule):
             num_res_channels=num_res_channels,
             downsample_parameters=downsample_parameters,
             upsample_parameters=upsample_parameters,
-            num_embeddings=num_embeddings,
             embedding_dim=embedding_dim,
-            commitment_cost=commitment_cost,
+            levels=levels,
             act=act,
         )
 

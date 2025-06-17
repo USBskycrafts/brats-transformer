@@ -32,10 +32,11 @@ class FiniteScalarQuantizer(nn.Module):
         return 0.0, quantized_normalized.permute(self.quantization_permutation)
 
     def quantize(self, encodings: torch.Tensor) -> torch.Tensor:
+        _, encodings = self(encodings)
         encodings = encodings.permute(self.flatten_permutation)
         assert encodings.shape[-1] == len(self._levels_tensor)
         zhat = self._scale_and_shift(encodings)
-        return (zhat * self._basis).sum(dim=-1)
+        return (zhat * self._basis).sum(dim=-1).long()
 
     def embed(self, embedding_indices: torch.Tensor) -> torch.Tensor:
         embedding_indices = embedding_indices[..., None]

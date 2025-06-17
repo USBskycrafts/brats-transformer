@@ -31,8 +31,8 @@ class TestQuantizer(unittest.TestCase):
         fsqloss, fsq_quantized = self.fsq(x)
         self.assertEqual(vq_quantized.shape, fsq_quantized.shape)
 
-        vq_quantized = self.vq.quantize(vq_quantized)
-        fsq_quantized = self.fsq.quantize(fsq_quantized)
+        vq_quantized = self.vq.quantize(x)
+        fsq_quantized = self.fsq.quantize(x)
         self.assertEqual(vq_quantized.shape, fsq_quantized.shape)
         self.assertGreaterEqual(vq_quantized.min(), 0)
         self.assertLessEqual(vq_quantized.max(), 1023)
@@ -42,3 +42,4 @@ class TestQuantizer(unittest.TestCase):
         vq_embed = self.vq.embed(vq_quantized)
         fsq_embed = self.fsq.embed(fsq_quantized)
         self.assertEqual(vq_embed.shape, fsq_embed.shape)
+        self.assertTrue(torch.allclose(self.fsq(x)[1], fsq_embed))

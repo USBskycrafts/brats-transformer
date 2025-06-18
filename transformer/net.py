@@ -1,3 +1,4 @@
+import math
 from typing import Sequence
 
 import pytorch_lightning as pl
@@ -11,6 +12,7 @@ from autoencoder.modules import VQVAE
 from transformer.infer import MultiContrastGenerationInferer
 from transformer.transformer import ContrastGenerationTransformer
 import pytorch_optimizer
+
 
 class ContrastGeneration(pl.LightningModule):
     def __init__(self,
@@ -37,11 +39,10 @@ class ContrastGeneration(pl.LightningModule):
                      (1, 4, 1, 1, 0),
                      (0, 7, 1, 3, 0),
                  ),
-                 num_embeddings: int = 1024,
-                 embedding_dim: int = 3,
+                 embedding_dim: int = 5,
+                 levels: Sequence[int] = (8, 8, 8, 6, 5),
                  act: tuple | str | None = "SWISH",
                  num_contrast: int = 4,
-                 patch_size: int = 2,
                  hidden_size: int = 512,
                  mlp_dim: int = 2048,
                  num_layers: int = 12,
@@ -51,7 +52,7 @@ class ContrastGeneration(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
 
-        self.infer = MultiContrastGenerationInferer()
+        # 首先创建 VQ-VAE 来确定 latent 尺寸
         self.vqvae = VQVAE(
             spatial_dims=spatial_dims,
             in_channels=in_channels,
@@ -61,8 +62,8 @@ class ContrastGeneration(pl.LightningModule):
             num_res_channels=num_res_channels,
             downsample_parameters=downsample_parameters,
             upsample_parameters=upsample_parameters,
-            num_embeddings=num_embeddings,
             embedding_dim=embedding_dim,
+            levels=levels,
             act=act,
         )
         ckpt = torch.load(stage_one_ckpt, map_location='cpu')['state_dict']
@@ -77,17 +78,21 @@ class ContrastGeneration(pl.LightningModule):
         for param in self.vqvae.parameters():
             param.requires_grad = False
 
-        self.transformer = ContrastGenerationTransformer(
-            in_channels=embedding_dim,
-            img_size=img_size,
+        # 创建 MultiContrastGenerationInferer 并传递正确的参数
+        self.infer = MultiContrastGenerationInferer(
             spatial_dims=spatial_dims,
-            num_contrast=num_contrast,
+            latent_dims=embedding_dim,
+            latent_size=img_size,
+            hidden_dim=hidden_size,
+            num_contrasts=num_contrast
+        )
+
+        self.transformer = ContrastGenerationTransformer(
             hidden_size=hidden_size,
-            patch_size=patch_size,
             mlp_dim=mlp_dim,
             num_layers=num_layers,
             num_heads=num_heads,
-            num_embeddings=num_embeddings,
+            num_embeddings=math.prod(levels),
         )
 
     def forward(self, imgs, contrasts, target):
@@ -179,8 +184,17 @@ class ContrastGeneration(pl.LightningModule):
         }
 
     def configure_optimizers(self):
-        optimizer = pytorch_optimizer.Lamb(
-            self.transformer.parameters(),
+        # 收集所有需要优化的参数
+        params_to_optimize = []
+
+        # 添加 transformer 参数
+        params_to_optimize.extend(self.transformer.parameters())
+
+        # 添加 inferer 的可学习参数 (mask_token, contrast_embedding 等)
+        params_to_optimize.extend(self.infer.parameters())
+
+        optimizer = torch.optim.AdamW(
+            params_to_optimize,
             lr=self.hparams.get('lr', 1.0e-4),
         )
         return [optimizer], []

@@ -60,10 +60,10 @@ class FiniteScalarQuantizer(nn.Module):
         half_l = (self._levels_tensor - 1) * (1 - eps) / 2
         offset = torch.where(
             self._levels_tensor % 2 == 1,
-            torch.tensor(0.0, device=z.device),
-            torch.tensor(0.5, device=z.device)
+            0.0,
+            0.5
         )
-        shift = torch.atan(offset / half_l)
+        shift = torch.tan(offset / half_l)
         return torch.tanh(z + shift) * half_l - offset
 
     def _round_ste(self, z: torch.Tensor) -> torch.Tensor:

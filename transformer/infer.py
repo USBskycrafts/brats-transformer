@@ -33,7 +33,7 @@ class MultiContrastGenerationInferer(nn.Module):
             num_heads=8,
             hidden_size=hidden_dim,
             proj_type="conv",
-            pos_embed_type="none"
+            # pos_embed_type="none"
         )
 
         self.contrast_embedding = nn.Parameter(
@@ -60,8 +60,8 @@ class MultiContrastGenerationInferer(nn.Module):
                 ):
         features = []
         for img in imgs:
-            # with torch.no_grad():
-            feature = vqvae.encode_stage_2_inputs(img)
+            with torch.no_grad():
+                feature = vqvae.encode_stage_2_inputs(img)
 
             feature = self.patch_embed(feature)
             features.append(feature)
@@ -70,32 +70,32 @@ class MultiContrastGenerationInferer(nn.Module):
         contrast_emb = self.contrast_embedding[contrasts]  # (B, 1, hidden_dim)
         features.append(contrast_emb)
 
-        # with torch.no_grad():
-        feature = vqvae.encode_stage_2_inputs(target)
+        with torch.no_grad():
+            feature = vqvae.encode_stage_2_inputs(target)
 
         feature = self.patch_embed(feature)
         features.append(feature)
 
-        # with torch.no_grad():
-        indices = vqvae.index_quantize(target)
-        indices = indices.flatten(1)
-        mask_ratio = math.cos(
-            random.random() * math.pi / 2
-        )
-        num_to_mask = int(
-            mask_ratio * indices.shape[1]
-        )
-        rand_indices = torch.rand(
-            indices.shape, device=indices.device).argsort(dim=1)
-        mask_indices = rand_indices[:, :num_to_mask]
-        batch_size, seq_len, feature_dim = features[-1].shape
-        _, num_to_mask = mask_indices.shape
-        index_to_scatter = mask_indices.unsqueeze(
-            -1).expand(-1, -1, feature_dim)
-        src = self.mask_token.expand(batch_size, num_to_mask, feature_dim)
-        masked_input = features[-1].clone()
-        masked_input.scatter_(dim=1, index=index_to_scatter, src=src)
-        features[-1] = masked_input
+        with torch.no_grad():
+            indices = vqvae.index_quantize(target)
+            indices = indices.flatten(1)
+            mask_ratio = math.cos(
+                random.random() * math.pi / 2
+            )
+            num_to_mask = max(1, int(
+                mask_ratio * indices.shape[1]
+            ))
+            rand_indices = torch.rand(
+                indices.shape, device=indices.device).argsort(dim=1)
+            mask_indices = rand_indices[:, :num_to_mask]
+            batch_size, seq_len, feature_dim = features[-1].shape
+            _, num_to_mask = mask_indices.shape
+            index_to_scatter = mask_indices.unsqueeze(
+                -1).expand(-1, -1, feature_dim)
+            src = self.mask_token.expand(batch_size, num_to_mask, feature_dim)
+            masked_input = features[-1].clone()
+            masked_input.scatter_(dim=1, index=index_to_scatter, src=src)
+            features[-1] = masked_input
 
         features = torch.cat(features, dim=1)
 
@@ -238,7 +238,5 @@ class MultiContrastGenerationInferer(nn.Module):
         )
 
         # 通过VQ-VAE解码生成最终图像
-        decoded_latents = vqvae.quantizer.embed(final_tokens_reshaped)
-        generated_images = vqvae.decode_stage_2_outputs(decoded_latents)
-
+        generated_images = vqvae.decode_samples(final_tokens_reshaped)
         return generated_images

@@ -196,6 +196,7 @@ class ContrastGeneration(pl.LightningModule):
         optimizer = torch.optim.Adam(
             params_to_optimize,
             lr=self.hparams.get('lr', 1.0e-4),
+            betas=(0.9, 0.96)
         )
         return [optimizer], []
     # -------------------------------------------------------------------

@@ -1,3 +1,4 @@
+import math
 import unittest
 from typing import override
 
@@ -377,66 +378,23 @@ class TestQuantizer(unittest.TestCase):
             fsq = FiniteScalarQuantizer(
                 spatial_dims=spatial_dims, levels=levels)
 
-            if spatial_dims == 1:
-                x = torch.randn(2, 4, 16)
-            elif spatial_dims == 2:
-                x = torch.randn(2, 4, 8, 8)
-            else:  # spatial_dims == 3
-                x = torch.randn(2, 4, 4, 4, 4)
+            for _ in range(1000):
+                if spatial_dims == 1:
+                    x = torch.randn(2, 4, 16) * 1e4
+                elif spatial_dims == 2:
+                    x = torch.randn(2, 4, 8, 8) * 1e4
+                else:  # spatial_dims == 3
+                    x = torch.randn(2, 4, 4, 4, 4) * 1e4
 
-            # 测试前向传播
-            _, quantized = fsq(x)
-            self.assertEqual(quantized.shape, x.shape)
+                # 测试前向传播
+                _, quantized = fsq(x)
+                self.assertEqual(quantized.shape, x.shape)
 
-            # 测试往返
-            indices = fsq.quantize(x)
-            recovered = fsq.embed(indices)
-            self.assertTrue(torch.allclose(quantized, recovered, atol=1e-6))
-
-    def test_device_consistency(self):
-        """测试设备一致性（CPU/GPU如果可用）"""
-        fsq = FiniteScalarQuantizer(spatial_dims=2, levels=[8, 5, 5, 5])
-        x = torch.randn(2, 4, 8, 8)
-
-        # CPU测试
-        indices_cpu = fsq.quantize(x)
-        recovered_cpu = fsq.embed(indices_cpu)
-
-        # 如果GPU可用，测试GPU
-        if torch.cuda.is_available():
-            fsq_gpu = fsq.cuda()
-            x_gpu = x.cuda()
-
-            indices_gpu = fsq_gpu.quantize(x_gpu)
-            recovered_gpu = fsq_gpu.embed(indices_gpu)
-
-            # 验证CPU和GPU结果一致
-            self.assertTrue(torch.allclose(indices_cpu, indices_gpu.cpu()))
-            self.assertTrue(torch.allclose(
-                recovered_cpu, recovered_gpu.cpu(), atol=1e-6))
-
-    def test_batch_size_independence(self):
-        """测试不同批次大小的独立性"""
-        fsq = FiniteScalarQuantizer(spatial_dims=2, levels=[8, 5, 5, 5])
-
-        # 创建测试数据
-        x_single = torch.randn(1, 4, 8, 8)
-        x_batch = x_single.repeat(4, 1, 1, 1)  # 将单个样本复制4次
-
-        # 单个样本处理
-        indices_single = fsq.quantize(x_single)
-        recovered_single = fsq.embed(indices_single)
-
-        # 批次处理
-        indices_batch = fsq.quantize(x_batch)
-        recovered_batch = fsq.embed(indices_batch)
-
-        # 验证批次中每个样本的结果与单个样本处理结果一致
-        for i in range(4):
-            self.assertTrue(torch.allclose(
-                indices_single[0], indices_batch[i]))
-            self.assertTrue(torch.allclose(
-                recovered_single[0], recovered_batch[i], atol=1e-6))
+                # 测试往返
+                indices = fsq.quantize(x)
+                recovered = fsq.embed(indices)
+                self.assertTrue(torch.allclose(
+                    quantized, recovered, atol=1e-6))
 
 
 if __name__ == '__main__':

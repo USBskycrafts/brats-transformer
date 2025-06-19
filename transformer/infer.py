@@ -60,8 +60,9 @@ class MultiContrastGenerationInferer(nn.Module):
                 ):
         features = []
         for img in imgs:
-            with torch.no_grad():
-                feature = vqvae.encode_stage_2_inputs(img)
+            # with torch.no_grad():
+            feature = vqvae.encode_stage_2_inputs(img)
+
             feature = self.patch_embed(feature)
             features.append(feature)
 
@@ -69,33 +70,32 @@ class MultiContrastGenerationInferer(nn.Module):
         contrast_emb = self.contrast_embedding[contrasts]  # (B, 1, hidden_dim)
         features.append(contrast_emb)
 
-        with torch.no_grad():
-            feature = vqvae.encode_stage_2_inputs(target)
+        # with torch.no_grad():
+        feature = vqvae.encode_stage_2_inputs(target)
+
         feature = self.patch_embed(feature)
         features.append(feature)
 
-        with torch.no_grad():
-            indices = vqvae.index_quantize(target)
-            indices = indices.flatten(1)
-            mask_ratio = math.cos(
-                random.random() * math.pi / 2
-            )
-            num_to_mask = int(
-                mask_ratio * indices.shape[1]
-            )
-            rand_indices = torch.rand(
-                indices.shape, device=indices.device).argsort(dim=1)
-            mask_indices = rand_indices[:, :num_to_mask]
-            masked_input = features[-1].clone()
-
-            # 使用可学习的mask token替换选中的位置
-            for batch_idx in range(masked_input.size(0)):
-                mask_positions = mask_indices[batch_idx]
-                if len(mask_positions) > 0:
-                    masked_input[batch_idx,
-                                 mask_positions] = self.mask_token.squeeze(0)
-
-            features[-1] = masked_input
+        # with torch.no_grad():
+        indices = vqvae.index_quantize(target)
+        indices = indices.flatten(1)
+        mask_ratio = math.cos(
+            random.random() * math.pi / 2
+        )
+        num_to_mask = int(
+            mask_ratio * indices.shape[1]
+        )
+        rand_indices = torch.rand(
+            indices.shape, device=indices.device).argsort(dim=1)
+        mask_indices = rand_indices[:, :num_to_mask]
+        batch_size, seq_len, feature_dim = features[-1].shape
+        _, num_to_mask = mask_indices.shape
+        index_to_scatter = mask_indices.unsqueeze(
+            -1).expand(-1, -1, feature_dim)
+        src = self.mask_token.expand(batch_size, num_to_mask, feature_dim)
+        masked_input = features[-1].clone()
+        masked_input.scatter_(dim=1, index=index_to_scatter, src=src)
+        features[-1] = masked_input
 
         features = torch.cat(features, dim=1)
 
@@ -185,13 +185,14 @@ class MultiContrastGenerationInferer(nn.Module):
                 )
 
                 # 创建unmask掩码
-                tokens_to_unmask = torch.zeros_like(mask_schedule)
-                for batch_idx in range(tokens_to_unmask.size(0)):
-                    valid_indices = top_indices[batch_idx][
-                        top_indices[batch_idx] < mask_schedule.size(1)
-                    ]
-                    if len(valid_indices) > 0:
-                        tokens_to_unmask[batch_idx, valid_indices] = True
+                seq_len = mask_schedule.size(1)
+                tokens_to_unmask = torch.zeros_like(
+                    mask_schedule, dtype=torch.bool)
+                valid_indices_mask = top_indices < seq_len
+                safe_indices = torch.where(valid_indices_mask, top_indices, 0)
+                src_values = valid_indices_mask
+                tokens_to_unmask.scatter_(
+                    dim=1, index=safe_indices, src=src_values)
 
                 # 只unmask当前还是masked状态的tokens
                 tokens_to_unmask = tokens_to_unmask & mask_schedule

@@ -193,7 +193,7 @@ class ContrastGeneration(pl.LightningModule):
         # 添加 inferer 的可学习参数 (mask_token, contrast_embedding 等)
         params_to_optimize.extend(self.infer.parameters())
 
-        optimizer = torch.optim.AdamW(
+        optimizer = torch.optim.Adam(
             params_to_optimize,
             lr=self.hparams.get('lr', 1.0e-4),
         )

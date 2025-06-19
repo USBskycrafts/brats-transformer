@@ -39,7 +39,9 @@ def main():
         logger=load_instance(config['trainer']['logger']),
         callbacks=load_instances(config['trainer']['callbacks']),
         max_epochs=config['trainer']['max_epochs'],
-        precision='16-mixed'
+        precision='16-mixed',
+        accumulate_grad_batches=config['trainer'].get(
+            'accumulate_grad_batches', 1)
     )
 
     if not args.test_only:

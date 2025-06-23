@@ -42,10 +42,11 @@ class TestInferer2D(unittest.TestCase):
         img = torch.randn(2, 1, 96, 96)
         imgs = [img for _ in range(3)]
         target = torch.randn(2, 1, 96, 96)
-        contrasts = torch.randint(0, 4, (2, 1))
+        input_contrasts = torch.randint(0, 4, (2, 3))
+        target_contrasts = torch.randint(0, 4, (2, 1))
 
         loss, logits_masked, indices_masked = self.inferer(
-            imgs, contrasts, target, self.vqvae, self.transformer)
+            imgs, input_contrasts, target, target_contrasts, self.vqvae, self.transformer)
 
         # 验证输出形状和值范围
         self.assertIsInstance(loss, torch.Tensor)
@@ -64,11 +65,12 @@ class TestInferer2D(unittest.TestCase):
         """测试采样功能"""
         img = torch.randn(2, 1, 96, 96)
         imgs = [img for _ in range(3)]
-        contrasts = torch.randint(0, 4, (2, 1))
+        input_contrasts = torch.randint(0, 4, (2, 3))
+        target_contrasts = torch.randint(0, 4, (2, 1))
 
         # 使用较少的迭代次数加速测试
         generated = self.inferer.sample(
-            imgs, contrasts, self.vqvae, self.transformer, iterations=4
+            imgs, input_contrasts, target_contrasts, self.vqvae, self.transformer, iterations=4
         )
 
         # 验证输出形状
@@ -98,12 +100,13 @@ class TestInferer2D(unittest.TestCase):
         """测试不同迭代次数的采样"""
         img = torch.randn(1, 1, 96, 96)
         imgs = [img for _ in range(3)]
-        contrasts = torch.randint(0, 4, (1, 1))
+        input_contrasts = torch.randint(0, 4, (1, 3))
+        target_contrasts = torch.randint(0, 4, (1, 1))
 
         for iterations in [1, 2, 4, 8]:
             with self.subTest(iterations=iterations):
                 generated = self.inferer.sample(
-                    imgs, contrasts, self.vqvae, self.transformer, iterations=iterations
+                    imgs, input_contrasts, target_contrasts, self.vqvae, self.transformer, iterations=iterations
                 )
                 self.assertEqual(generated.shape, (1, 1, 96, 96))
                 print(f"2D Iterations {iterations} - Generated successfully")
@@ -143,10 +146,11 @@ class TestInferer3D(unittest.TestCase):
         img = torch.randn(1, 1, 64, 96, 96)  # 减小尺寸和batch size
         imgs = [img for _ in range(3)]
         target = torch.randn(1, 1, 64, 96, 96)
-        contrasts = torch.randint(0, 4, (1, 1))
+        input_contrasts = torch.randint(0, 4, (1, 3))
+        target_contrasts = torch.randint(0, 4, (1, 1))
 
         loss, logits_masked, indices_masked = self.inferer(
-            imgs, contrasts, target, self.vqvae, self.transformer)
+            imgs, input_contrasts, target, target_contrasts, self.vqvae, self.transformer)
 
         # 验证输出
         self.assertIsInstance(loss, torch.Tensor)
@@ -165,11 +169,12 @@ class TestInferer3D(unittest.TestCase):
         """测试3D采样功能"""
         img = torch.randn(1, 1, 64, 96, 96)
         imgs = [img for _ in range(3)]
-        contrasts = torch.randint(0, 4, (1, 1))
+        input_contrasts = torch.randint(0, 4, (1, 3))
+        target_contrasts = torch.randint(0, 4, (1, 1))
 
         # 使用较少的迭代次数
         generated = self.inferer.sample(
-            imgs, contrasts, self.vqvae, self.transformer, iterations=2
+            imgs, input_contrasts, target_contrasts, self.vqvae, self.transformer, iterations=2
         )
 
         # 验证输出形状
@@ -231,16 +236,17 @@ class TestInfererEdgeCases(unittest.TestCase):
         img = torch.randn(1, 1, 64, 64)
         imgs = [img for _ in range(3)]
         target = torch.randn(1, 1, 64, 64)
-        contrasts = torch.randint(0, 4, (1, 1))
+        input_contrasts = torch.randint(0, 4, (1, 3))
+        target_contrasts = torch.randint(0, 4, (1, 1))
 
         # 训练测试
         loss, logits_masked, indices_masked = self.inferer(
-            imgs, contrasts, target, self.vqvae, self.transformer)
+            imgs, input_contrasts, target, target_contrasts, self.vqvae, self.transformer)
         self.assertIsInstance(loss, torch.Tensor)
 
         # 采样测试
         generated = self.inferer.sample(
-            imgs, contrasts, self.vqvae, self.transformer, iterations=2
+            imgs, input_contrasts, target_contrasts, self.vqvae, self.transformer, iterations=2
         )
         self.assertEqual(generated.shape, (1, 1, 64, 64))
 
@@ -250,13 +256,14 @@ class TestInfererEdgeCases(unittest.TestCase):
         """测试forward和sample的一致性"""
         img = torch.randn(2, 1, 64, 64)
         imgs = [img for _ in range(3)]
-        contrasts = torch.randint(0, 4, (2, 1))
+        input_contrasts = torch.randint(0, 4, (2, 3))
+        target_contrasts = torch.randint(0, 4, (2, 1))
 
         # 多次采样应该能正常工作
         for i in range(3):
             with self.subTest(run=i):
                 generated = self.inferer.sample(
-                    imgs, contrasts, self.vqvae, self.transformer, iterations=2
+                    imgs, input_contrasts, target_contrasts, self.vqvae, self.transformer, iterations=2
                 )
                 self.assertEqual(generated.shape, (2, 1, 64, 64))
 

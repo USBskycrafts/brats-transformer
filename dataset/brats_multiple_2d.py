@@ -83,6 +83,7 @@ class BraTS2021Dataset:
         target = transform(target)
         return (
             source,
+            input_modalities,
+            target,
             target_modalities,
-            target
         )

@@ -2,8 +2,8 @@ import unittest
 
 import torch
 
-from transformer.infer import MultiContrastGenerationInferer
-from transformer.transformer import ContrastGenerationTransformer
+from transformer.aligned_infer import MultiContrastGenerationInferer
+from transformer.transformer import TransformerEncoderModel
 from autoencoder.vqvae import VQGAN
 
 
@@ -26,14 +26,14 @@ class TestInferer2D(unittest.TestCase):
             spatial_dims=2,
             latent_dims=5,
             latent_size=actual_latent_size,  # 使用实际尺寸
-            hidden_dim=512,
+            hidden_dim=768,
             num_contrasts=4
         )
 
-        self.transformer = ContrastGenerationTransformer(
+        self.transformer = TransformerEncoderModel(
             num_layers=2,
             num_embeddings=(8 * 8 * 8 * 6 * 5),
-            hidden_size=512
+            hidden_size=768
         )
 
     def test_train(self):
@@ -86,7 +86,7 @@ class TestInferer2D(unittest.TestCase):
             mask_token, torch.zeros_like(mask_token)))
 
         # 验证mask token有正确的形状
-        self.assertEqual(mask_token.shape, (1, 1, 512))
+        self.assertEqual(mask_token.shape, (1, 1, 768))
 
         # 验证mask token需要梯度
         self.assertTrue(mask_token.requires_grad)
@@ -127,14 +127,14 @@ class TestInferer3D(unittest.TestCase):
             spatial_dims=3,
             latent_dims=5,
             latent_size=actual_latent_size,  # 使用实际尺寸
-            hidden_dim=256,
+            hidden_dim=768,
             num_contrasts=4
         )
 
-        self.transformer = ContrastGenerationTransformer(
+        self.transformer = TransformerEncoderModel(
             num_layers=2,
             num_embeddings=(8 * 8 * 8 * 6 * 5),
-            hidden_size=256
+            hidden_size=768
         )
 
     def test_train(self):
@@ -187,7 +187,7 @@ class TestInferer3D(unittest.TestCase):
             mask_token, torch.zeros_like(mask_token)))
 
         # 验证mask token有正确的形状
-        self.assertEqual(mask_token.shape, (1, 1, 256))
+        self.assertEqual(mask_token.shape, (1, 1, 768))
 
         # 验证mask token需要梯度
         self.assertTrue(mask_token.requires_grad)
@@ -216,14 +216,14 @@ class TestInfererEdgeCases(unittest.TestCase):
             spatial_dims=2,
             latent_dims=5,
             latent_size=actual_latent_size,  # 使用实际尺寸
-            hidden_dim=256,
+            hidden_dim=768,
             num_contrasts=4
         )
 
-        self.transformer = ContrastGenerationTransformer(
+        self.transformer = TransformerEncoderModel(
             num_layers=1,
             num_embeddings=(8 * 8 * 8 * 6 * 5),
-            hidden_size=256
+            hidden_size=768
         )
 
     def test_single_batch(self):

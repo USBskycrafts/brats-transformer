@@ -2,12 +2,12 @@ import unittest
 
 import torch
 
-from transformer.transformer import ContrastGenerationTransformer
+from transformer.transformer import TransformerEncoderModel
 
 
 class TestTransformer(unittest.TestCase):
     def setUp(self):
-        self.transformer = ContrastGenerationTransformer(
+        self.transformer = TransformerEncoderModel(
             hidden_size=512,
             mlp_dim=2048,
             num_layers=12,

@@ -1,18 +1,21 @@
+from logging import warning
 import math
 import random
 from typing import Sequence
 
-from numpy import mask_indices
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from monai.networks.blocks.patchembedding import PatchEmbeddingBlock
+from transformers import Dinov2Model
 
 from autoencoder.vqvae import VQVAE
 from transformer.transformer import TransformerEncoderModel
 
 
 class MultiContrastGenerationInferer(nn.Module):
+    aligned_weight: int
+
     def __init__(
         self,
         spatial_dims: int = 2,
@@ -20,11 +23,14 @@ class MultiContrastGenerationInferer(nn.Module):
         latent_size: int | Sequence[int] = 12,
         hidden_dim: int = 512,
         num_contrasts: int = 4,
-        max_token_len: int = 1024
+        max_token_len: int = 1024,
+        pretrained_dir: str = 'facebook/dinov2-base',
+        aligned_weight: int = 0.5
     ):
         super().__init__()
-        self.loss = nn.CrossEntropyLoss(label_smoothing=0.1)
+        self.aligned_weight = aligned_weight
 
+        self.loss = nn.CrossEntropyLoss(label_smoothing=0.1)
         self.patch_embed = PatchEmbeddingBlock(
             spatial_dims=spatial_dims,
             in_channels=latent_dims,
@@ -49,6 +55,10 @@ class MultiContrastGenerationInferer(nn.Module):
             torch.randn(1, 1, hidden_dim)
         )
 
+        self.dinov2 = Dinov2Model.from_pretrained(pretrained_dir)
+        for p in self.dinov2.parameters():
+            p.requires_grad = False
+
     def forward(self,
                 imgs,
                 contrasts,
@@ -70,7 +80,6 @@ class MultiContrastGenerationInferer(nn.Module):
 
         with torch.no_grad():
             feature = vqvae.encode_stage_2_inputs(target)
-
         feature = self.patch_embed(feature)
         features.append(feature)
 
@@ -99,8 +108,31 @@ class MultiContrastGenerationInferer(nn.Module):
         features = torch.cat(features, dim=1)
         features = features + self.pos_embedding[:, :features.shape[1], :]
 
-        # unmask the tokens
-        logits = transformer(features)
+        spatial_dims = len(target.shape[2:])
+        if spatial_dims == 2:
+            with torch.no_grad():
+                target_bar = target.repeat(
+                    (1, 3, 1, 1) if spatial_dims == 2 else (1, 3, 1, 1, 1))
+                target_bar = F.interpolate(
+                    target_bar,
+                    (224, 224),
+                    mode='bilinear',
+                )
+                target_feature = self.dinov2(target_bar).last_hidden_state
+            last_hidden_state, logits = transformer(features)
+            last_hidden_state = last_hidden_state[:, -indices.shape[1]:]
+            p = last_hidden_state.transpose(1, 2)
+            q = target_feature.transpose(1, 2)
+            p = F.interpolate(
+                p,
+                q.shape[-1],
+                mode='linear'
+            )
+            dloss = F.mse_loss(p, q)
+        else:
+            warning('dinov2 does not support 3D images yet')
+            dloss = 0.0
+            _, logits = transformer(features)
 
         # select the logits and labels for masked tokens
         logits_masked = logits[:, -indices.shape[1]:].gather(
@@ -113,7 +145,7 @@ class MultiContrastGenerationInferer(nn.Module):
         )
         # caculate loss
         loss = self.loss(logits_masked.transpose(1, -1),
-                         labels_masked)
+                         labels_masked) + dloss
         return loss, logits_masked, labels_masked
 
     @torch.no_grad()
@@ -159,7 +191,7 @@ class MultiContrastGenerationInferer(nn.Module):
             )
             input_tokens = input_tokens + \
                 self.pos_embedding[:, :input_tokens.shape[1], :]
-            logits = transformer(input_tokens)
+            _, logits = transformer(input_tokens)
             logits = logits[:, -num_predict_tokens:]
 
             prob = F.softmax(logits, dim=-1)

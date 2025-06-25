@@ -8,15 +8,16 @@ from monai.metrics.regression import PSNRMetric as PSNR
 from monai.metrics.regression import SSIMMetric as SSIM
 
 from autoencoder.modules import VQVAE
-from transformer.infer import MultiContrastGenerationInferer
+from transformer.aligned_infer import MultiContrastGenerationInferer
 from transformer.transformer import TransformerEncoderModel
 
 
-class ContrastGeneration(pl.LightningModule):
+class MaskGiT(pl.LightningModule):
     def __init__(self,
                  spatial_dims: int,
                  img_size: Sequence[int] | int,
                  stage_one_ckpt: str,
+                 pretrained_dir: str,
                  in_channels: int = 1,
                  out_channels: int = 1,
                  channels: Sequence[int] = (32, 32, 64, 128, 256),
@@ -45,6 +46,7 @@ class ContrastGeneration(pl.LightningModule):
                  mlp_dim: int = 2048,
                  num_layers: int = 12,
                  num_heads: int = 8,
+                 aligned_weight: int = 0.5,
                  lr=1.0e-4,
                  ):
         super().__init__()
@@ -82,7 +84,9 @@ class ContrastGeneration(pl.LightningModule):
             latent_dims=embedding_dim,
             latent_size=img_size,
             hidden_dim=hidden_size,
-            num_contrasts=num_contrast
+            num_contrasts=num_contrast,
+            pretrained_dir=pretrained_dir,
+            aligned_weight=aligned_weight
         )
 
         self.transformer = TransformerEncoderModel(

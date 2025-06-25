@@ -36,8 +36,9 @@ class MultiContrastGenerationInferer(nn.Module):
             pos_embed_type="none"
         )
 
-        self.contrast_embedding = nn.Parameter(
-            torch.randn(num_contrasts, hidden_dim)
+        self.contrast_embedding = nn.Embedding(
+            num_embeddings=num_contrasts,
+            embedding_dim=hidden_dim
         )
 
         self.pos_embedding = nn.Parameter(
@@ -51,21 +52,25 @@ class MultiContrastGenerationInferer(nn.Module):
 
     def forward(self,
                 imgs,
-                contrasts,
+                input_contrasts,
                 target,
+                target_contrasts,
                 vqvae: VQVAE,
                 transformer: TransformerEncoderModel
                 ):
         features = []
-        for img in imgs:
+        for img, input_contrast in zip(imgs, input_contrasts.split(1, dim=1)):
+            features.append(
+                self.contrast_embedding(input_contrast)
+            )
             with torch.no_grad():
                 feature = vqvae.encode_stage_2_inputs(img)
-
             feature = self.patch_embed(feature)
             features.append(feature)
 
         # 添加维度使contrast embedding可以连接
-        contrast_emb = self.contrast_embedding[contrasts]  # (B, 1, hidden_dim)
+        # (B, 1, hidden_dim)
+        contrast_emb = self.contrast_embedding(target_contrasts)
         features.append(contrast_emb)
 
         with torch.no_grad():
@@ -78,9 +83,7 @@ class MultiContrastGenerationInferer(nn.Module):
         with torch.no_grad():
             indices = vqvae.index_quantize(target)
             indices = indices.flatten(1)
-            mask_ratio = math.cos(
-                random.random() * math.pi / 2
-            )
+            mask_ratio = random.random()
             num_to_mask = max(1, int(
                 mask_ratio * indices.shape[1]
             ))
@@ -119,7 +122,8 @@ class MultiContrastGenerationInferer(nn.Module):
     @torch.no_grad()
     def sample(self,
                imgs,
-               contrasts,
+               input_contrasts,
+               target_contrasts,
                vqvae: VQVAE,
                transformer: TransformerEncoderModel,
                iterations: int = 6
@@ -129,7 +133,10 @@ class MultiContrastGenerationInferer(nn.Module):
         # 提取输入图像特征
         features = []
         spatial_sizes = []
-        for img in imgs:
+        for img, input_contrast in zip(imgs, input_contrasts.split(1, dim=1)):
+            features.append(
+                self.contrast_embedding(input_contrast)
+            )
             feature = vqvae.encode_stage_2_inputs(img)
             spatial_sizes.append(feature.shape[2:])
             feature = self.patch_embed(feature)
@@ -137,7 +144,8 @@ class MultiContrastGenerationInferer(nn.Module):
         assert all(s == spatial_sizes[0] for s in spatial_sizes), \
             "All input images must have the same spatial size."
         # 添加维度使contrast embedding可以连接
-        contrast_emb = self.contrast_embedding[contrasts]  # (B, 1, hidden_dim)
+        # (B, 1, hidden_dim)
+        contrast_emb = self.contrast_embedding(target_contrasts)
         features.append(contrast_emb)
         features = torch.cat(features, dim=1)
 

@@ -102,11 +102,13 @@ class ContrastGeneration(pl.LightningModule):
                           )
 
     def training_step(self, batch, batch_idx):
-        imgs, contrasts, target = self._prepare_input(batch)
+        imgs, input_contrasts, target, target_contrasts = self._prepare_input(
+            batch)
         loss, *_ = self.infer(
             imgs,
-            contrasts,
+            input_contrasts,
             target,
+            target_contrasts,
             self.vqvae,
             self.transformer
         )
@@ -116,10 +118,12 @@ class ContrastGeneration(pl.LightningModule):
 
     @torch.no_grad()
     def validation_step(self, batch, batch_idx):
-        imgs, contrasts, target = self._prepare_input(batch)
+        imgs, input_contrasts, target, target_contrasts = self._prepare_input(
+            batch)
         generated = self.infer.sample(
             imgs,
-            contrasts,
+            input_contrasts,
+            target_contrasts,
             self.vqvae,
             self.transformer
         )
@@ -148,11 +152,13 @@ class ContrastGeneration(pl.LightningModule):
     @torch.no_grad()
     def test_step(self, batch, batch_idx):
         # 准备输入数据
-        imgs, contrasts, target = self._prepare_input(batch)
+        imgs, input_contrasts, target, target_contrasts = self._prepare_input(
+            batch)
         # 生成图像
         generated = self.infer.sample(
             imgs,
-            contrasts,
+            input_contrasts,
+            target_contrasts,
             self.vqvae,
             self.transformer
         )
@@ -203,12 +209,13 @@ class ContrastGeneration(pl.LightningModule):
     @torch.no_grad()
     def _prepare_input(self, batch):
         # support 2d and 3d
-        imgs, contrasts, target = batch
+        imgs, input_contrasts, target, target_contrasts = batch
         if not isinstance(imgs, list):
             imgs = torch.chunk(imgs,
                                chunks=self.hparams.get('num_contrast', 0) - 1,
                                dim=1)
         imgs = [img.to(self.device) for img in imgs]
-        contrasts = contrasts.to(self.device)
+        input_contrasts = input_contrasts.to(self.device)
+        target_contrasts = target_contrasts.to(self.device)
         target = target.to(self.device)
-        return imgs, contrasts, target
+        return imgs, input_contrasts, target, target_contrasts

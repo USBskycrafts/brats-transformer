@@ -2,7 +2,6 @@ import math
 import random
 from typing import Sequence
 
-from numpy import mask_indices
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

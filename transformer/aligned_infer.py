@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
 from monai.networks.blocks.patchembedding import PatchEmbeddingBlock
-from transformers import Dinov2Model
+from transformers import Dinov2WithRegistersModel
 
 from autoencoder.vqvae import VQVAE
 from transformer.transformer import TransformerEncoderModel
@@ -56,7 +56,7 @@ class MultiContrastGenerationInferer(nn.Module):
             torch.randn(1, 1, hidden_dim)
         )
 
-        self.dinov2 = Dinov2Model.from_pretrained(pretrained_dir)
+        self.dinov2 = Dinov2WithRegistersModel.from_pretrained(pretrained_dir)
         for p in self.dinov2.parameters():
             p.requires_grad = False
 
@@ -145,7 +145,7 @@ class MultiContrastGenerationInferer(nn.Module):
                     mode='bilinear',
                 )
                 target_feature = self.dinov2(target_bar).last_hidden_state
-                target_feature = target_feature[:, :-1, :]
+                target_feature = target_feature[:, :indices.shape[1], :]
             last_hidden_state, logits = transformer(features)
             last_hidden_state = last_hidden_state[:, -indices.shape[1]:]
             dloss = self._align_hidden_state(

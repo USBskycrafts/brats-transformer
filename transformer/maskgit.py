@@ -63,14 +63,14 @@ class MaskGit(nn.Module):
         )
 
         # generate the masked input indices
-        target_indices = target_indices.where(
+        masked_indices = target_indices.where(
             target_mask,
             self.mask_token_id
         )
         # calculate the logits from the transformer and return
         logits = self.transformer(
             torch.cat(
-                [input_indices, target_indices],
+                [input_indices, masked_indices],
                 dim=1
             )
         )

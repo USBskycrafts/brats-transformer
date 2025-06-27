@@ -13,7 +13,7 @@ from transformer.maskgit import MaskGit
 from transformer.transformer import TransformerEncoderModel
 
 
-class ContrastGeneration(pl.LightningModule):
+class ContrastMaskGiT(pl.LightningModule):
     def __init__(self,
                  spatial_dims: int,
                  img_size: Sequence[int] | int,

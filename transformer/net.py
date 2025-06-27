@@ -9,9 +9,8 @@ from monai.metrics.regression import SSIMMetric as SSIM
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
 from autoencoder.modules import VQVAE
-from transformer.infer import MultiContrastGenerationInferer
-from transformer.transformer import ContrastGenerationTransformer
-import pytorch_optimizer
+from transformer.maskgit import MaskGit
+from transformer.transformer import TransformerEncoderModel
 
 
 class ContrastGeneration(pl.LightningModule):
@@ -78,43 +77,60 @@ class ContrastGeneration(pl.LightningModule):
         for param in self.vqvae.parameters():
             param.requires_grad = False
 
-        # 创建 MultiContrastGenerationInferer 并传递正确的参数
-        self.infer = MultiContrastGenerationInferer(
-            spatial_dims=spatial_dims,
-            latent_dims=embedding_dim,
-            latent_size=img_size,
-            hidden_dim=hidden_size,
-            num_contrasts=num_contrast
-        )
-
-        self.transformer = ContrastGenerationTransformer(
+        vocab_size = math.prod(levels) + 1 + num_contrast
+        self.transformer = TransformerEncoderModel(
             hidden_size=hidden_size,
             mlp_dim=mlp_dim,
             num_layers=num_layers,
             num_heads=num_heads,
-            num_embeddings=math.prod(levels),
+            num_embeddings=vocab_size,
         )
 
-    def forward(self, imgs, contrasts, target):
-        return self.infer(imgs,
-                          contrasts,
-                          target,
-                          self.vqvae,
-                          self.transformer
-                          )
+        self.maskgit = MaskGit(
+            transformer=self.transformer,
+            # +1 for mask token, +num_contrast for contrast embeddings
+            vocab_size=vocab_size,
+            mask_token_id=math.prod(levels),
+        )
+
+        self.contrast_offset = math.prod(levels) + 1
+        self.img_shape = [img_size] * \
+            spatial_dims if isinstance(img_size, int) else img_size
+
+    def forward(self, imgs, input_contrasts, target, target_contrasts):
+        input_indices = []
+
+        # generate the input indices
+        for img, modality in zip(imgs, input_contrasts.split(1, dim=1)):
+            modality = modality + self.contrast_offset
+            input_indices.append(modality)
+            indices = self.vqvae.index_quantize(img)
+            input_indices.append(indices.flatten(1))
+            # caculate the contrast embeddings
+
+        # generate the target indices
+        modality = target_contrasts + self.contrast_offset
+        input_indices.append(modality)
+        input_indices = torch.cat(input_indices, dim=1)
+        if target is not None:
+            target_indices = self.vqvae.index_quantize(target)
+            target_indices = target_indices.flatten(1)
+            return input_indices, target_indices
+        else:
+            return input_indices
 
     def training_step(self, batch, batch_idx):
         imgs, input_contrasts, target, target_contrasts = self._prepare_input(
             batch)
-        loss, *_ = self.infer(
-            imgs,
-            input_contrasts,
-            target,
-            target_contrasts,
-            self.vqvae,
-            self.transformer
+        input_indices, target_indices = self(
+            imgs, input_contrasts, target, target_contrasts)
+
+        # caculate the loss
+        loss = self.maskgit(
+            input_indices, target_indices
         )
-        self.log('train/loss', loss, on_step=True,
+
+        self.log('train/loss', loss, on_step=True, sync_dist=True,
                  on_epoch=True, prog_bar=True, logger=True)
         return loss
 
@@ -122,13 +138,16 @@ class ContrastGeneration(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         imgs, input_contrasts, target, target_contrasts = self._prepare_input(
             batch)
-        generated = self.infer.sample(
-            imgs,
-            input_contrasts,
-            target_contrasts,
-            self.vqvae,
-            self.transformer
+        input_indices, target_indices = self(
+            imgs, input_contrasts, target, target_contrasts)
+        generated_indices = self.maskgit.generate(
+            num_tokens=target_indices.size(1),
+            conditions=input_indices,
+            device=input_indices.device
         )
+        last_indices = generated_indices[-1]
+        latent_indices = last_indices.view(-1, *self.img_shape)
+        generated = self.vqvae.decode_samples(latent_indices)
 
         psnr = PSNR(max_val=2.0)(generated, target)
         ssim = SSIM(spatial_dims=self.hparams.get('spatial_dims', 2),
@@ -153,17 +172,18 @@ class ContrastGeneration(pl.LightningModule):
 
     @torch.no_grad()
     def test_step(self, batch, batch_idx):
-        # 准备输入数据
         imgs, input_contrasts, target, target_contrasts = self._prepare_input(
             batch)
-        # 生成图像
-        generated = self.infer.sample(
-            imgs,
-            input_contrasts,
-            target_contrasts,
-            self.vqvae,
-            self.transformer
+        input_indices, target_indices = self(
+            imgs, input_contrasts, target, target_contrasts)
+        generated_indices = self.maskgit.generate(
+            num_tokens=target_indices.size(1),
+            conditions=input_indices,
+            device=input_indices.device
         )
+        last_indices = generated_indices[-1]
+        latent_indices = last_indices.view(-1, *self.img_shape)
+        generated = self.vqvae.decode_samples(latent_indices)
 
         # 计算PSNR
         psnr = PSNR(max_val=2.0)(generated, target)
@@ -195,9 +215,6 @@ class ContrastGeneration(pl.LightningModule):
 
         # 添加 transformer 参数
         params_to_optimize.extend(self.transformer.parameters())
-
-        # 添加 inferer 的可学习参数 (mask_token, contrast_embedding 等)
-        params_to_optimize.extend(self.infer.parameters())
 
         optimizer = torch.optim.Adam(
             params_to_optimize,

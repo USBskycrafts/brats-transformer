@@ -76,8 +76,8 @@ class MaskGit(nn.Module):
         )
 
         target_logits = logits[:, -target_indices.size(1):]
-        target_logits = target_logits[target_mask, :]
-        target_indices = target_indices[target_mask]
+        target_logits = target_logits[~target_mask, :]
+        target_indices = target_indices[~target_mask]
         return torch.nn.functional.cross_entropy(
             target_logits,
             target_indices
@@ -122,8 +122,7 @@ class MaskGit(nn.Module):
 
         # save the intermediate generated indices
         generated_indices = [current_indices]
-
-        for step in range(steps):
+        for step in range(1, steps + 1):
             if current_mask.sum() == 0:
                 # If no tokens are masked, break the loop
                 break
@@ -150,8 +149,8 @@ class MaskGit(nn.Module):
             )
             current_mask = current_mask & update_mask
             current_indices = torch.where(
-                current_mask,
-                self.mask_token_id,
+                update_mask,
+                current_indices,
                 max_indices
             )
             generated_indices.append(current_indices)
@@ -165,9 +164,6 @@ class MaskGit(nn.Module):
         device: torch.device
     ):
         mask = torch.rand(shape, device=device) < mask_ratio
-        # Ensure at least one token is masked
-        if mask.sum() == 0:
-            mask[:, random.randint(0, shape[1] - 1)] = True
         return mask
 
     def _compute_unmask_count(

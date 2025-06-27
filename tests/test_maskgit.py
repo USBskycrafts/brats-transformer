@@ -273,9 +273,6 @@ class TestMaskGit(unittest.TestCase):
                 self.assertEqual(mask.shape, shape)
                 self.assertEqual(mask.dtype, torch.bool)
 
-                # 验证至少有一个token被mask（根据实现逻辑）
-                self.assertTrue(torch.any(mask))
-
     def test_compute_unmask_count_cosine(self):
         """测试cosine调度的_compute_unmask_count函数"""
         current_mask = torch.ones(

@@ -2,6 +2,8 @@ from typing import Optional
 import torch
 import torch.nn as nn
 
+from transformers import RoFormerConfig, RoFormerModel
+
 
 class TransformerEncoderModel(nn.Module):
     def __init__(self,
@@ -14,22 +16,20 @@ class TransformerEncoderModel(nn.Module):
                  dropout: float = 0.1
                  ):
         super().__init__()
-        self.embedding = nn.Embedding(num_embeddings, hidden_size)
-        self.position_embedding = nn.Parameter(
-            torch.zeros(1, max_seq_len, hidden_size))
 
-        self.transformer_encoder = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(
-                d_model=hidden_size,
-                nhead=num_heads,
-                dim_feedforward=mlp_dim,
-                dropout=dropout,
-                activation='gelu',
-                norm_first=True,
-                batch_first=True
-            ),
-            num_layers=num_layers,
-            enable_nested_tensor=False
+        config = RoFormerConfig(
+            vocab_size=num_embeddings,
+            hidden_size=hidden_size,
+            num_hidden_layers=num_layers,
+            num_attention_heads=num_heads,
+            intermediate_size=mlp_dim,
+            max_position_embeddings=max_seq_len,
+            type_vocab_size=1,
+            attention_probs_dropout_prob=dropout
+        )
+
+        self.transformer_encoder = RoFormerModel(
+            config
         )
 
         self.out_proj = nn.Sequential(
@@ -44,19 +44,10 @@ class TransformerEncoderModel(nn.Module):
         Returns:
             logits: (B, L, num_embeddings) tensor of logits for each index.
         """
-        # Embedding the input indices
-        x = self.embedding(indices)
-
-        # Adding positional embeddings
-        seq_len = x.size(1)
-        if seq_len > self.position_embedding.size(1):
-            raise ValueError(
-                f"Input sequence length {seq_len} exceeds max sequence length {self.position_embedding.size(1)}."
-            )
-        x += self.position_embedding[:, :seq_len, :]
 
         # Passing through the transformer blocks
-        hidden_state = self.transformer_encoder(x, mask=mask)
+        hidden_state = self.transformer_encoder(
+            input_ids=indices).last_hidden_state
 
         # Projecting to the output space
         logits = self.out_proj(hidden_state)

@@ -8,10 +8,12 @@ from nibabel import nifti1
 
 
 class BraTS2021Dataset:
-    def __init__(self,
-                 roots: Path, modalites: t.Tuple[str],
-                 slice_range: t.List[int],
-                 ):
+    def __init__(
+        self,
+        roots: str,
+        modalites: t.Tuple[str],
+        slice_range: t.List[int],
+    ):
 
         self.roots = roots.split(';')
         self.modalites = modalites
@@ -68,16 +70,19 @@ class BraTS2021Dataset:
             transforms.CenterCrop(192),
         ])
 
-        # noise = torch.rand_like(torch.tensor(
-        #     len(self.modalites), dtype=torch.int32))
-        # noise = torch.randint(0, len(self.modalites), (len(self.modalites), ))
-        # idx_chosen = torch.argsort(noise)
-        idx_chosen = torch.randperm(len(self.modalites))
-        input_modalities = idx_chosen[:(len(self.modalites) - 1)]
-        target_modalities = idx_chosen[(len(self.modalites) - 1):]
+        input_modalities = torch.randint(
+            0,
+            len(self.modalites) + 1,
+            (len(self.modalites) - 1,)
+        )
+        target_modalities = torch.randint(
+            1,
+            len(self.modalites) + 1,
+            (1,)
+        )
 
-        source = modalities[:, :, input_modalities]
-        target = modalities[:, :, target_modalities]
+        source = modalities[:, :, input_modalities - 1]
+        target = modalities[:, :, target_modalities - 1]
 
         source = transform(source)
         target = transform(target)

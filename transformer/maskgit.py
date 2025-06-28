@@ -45,6 +45,7 @@ class MaskGit(nn.Module):
     def forward(
         self,
         input_indices: torch.Tensor,
+        input_mask: torch.Tensor,
         target_indices: torch.Tensor
     ):
         """
@@ -61,6 +62,10 @@ class MaskGit(nn.Module):
             mask_ratio,
             device=target_indices.device
         )
+        target_padding_mask = torch.ones_like(target_indices)
+        padding_mask = torch.cat([
+            target_padding_mask, input_mask
+        ], dim=1).type(torch.bool)
 
         # generate the masked input indices
         masked_indices = target_indices.where(
@@ -70,12 +75,13 @@ class MaskGit(nn.Module):
         # calculate the logits from the transformer and return
         logits = self.transformer(
             torch.cat(
-                [input_indices, masked_indices],
+                [masked_indices, input_indices],
                 dim=1
-            )
+            ),
+            mask=padding_mask
         )
 
-        target_logits = logits[:, -target_indices.size(1):]
+        target_logits = logits[:, :target_indices.size(1)]
         target_logits = target_logits[~target_mask, :]
         target_indices = target_indices[~target_mask]
         return torch.nn.functional.cross_entropy(
@@ -88,6 +94,7 @@ class MaskGit(nn.Module):
         self,
         num_tokens: int,
         conditions: torch.Tensor,
+        conditions_mask: torch.Tensor,
         device: torch.device,
         steps: int = 8,
         temperature: float = 1.0,
@@ -106,6 +113,14 @@ class MaskGit(nn.Module):
             generated_indices: list of (B, num_tokens) tensor of generated indices.
         """
         batch_size, seq_len = conditions.shape
+        target_padding_mask = torch.ones(
+            (batch_size, num_tokens),
+            device=conditions.device
+        )
+        padding_mask = torch.cat(
+            [target_padding_mask, conditions_mask],
+            dim=1
+        ).type(torch.bool)
 
         # Initialize the current tokens with mask token ID and mask
         current_indices = torch.full(
@@ -128,10 +143,11 @@ class MaskGit(nn.Module):
                 break
 
             input_indices = torch.cat(
-                (conditions, current_indices),
+                (current_indices, conditions),
                 dim=1
             )
-            logits = self.transformer(input_indices)[:, -num_tokens:]
+            logits = self.transformer(input_indices, mask=padding_mask)[
+                :, :num_tokens]
             probs = torch.softmax(logits / temperature, dim=-1)
             max_probs, max_indices = probs.max(dim=-1)
 

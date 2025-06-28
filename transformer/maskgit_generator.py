@@ -99,35 +99,53 @@ class ContrastMaskGiT(pl.LightningModule):
 
     def forward(self, imgs, input_contrasts, target, target_contrasts):
         input_indices = []
+        input_mask = []
 
         # generate the input indices
         for img, modality in zip(imgs, input_contrasts.split(1, dim=1)):
             modality = modality + self.contrast_offset
-            input_indices.append(modality)
+            input_indices.append(modality - 1)
             indices = self.vqvae.index_quantize(img)
             input_indices.append(indices.flatten(1))
+
+            # generate padding mask
+            modality_mask = (modality != 0)
+            batch_size, seq_len = indices.flatten(1).shape
+            modality_mask = modality_mask.expand(
+                -1,
+                seq_len + 1
+            )
+            input_mask.append(modality_mask)
             # caculate the contrast embeddings
 
         # generate the target indices
         modality = target_contrasts + self.contrast_offset
-        input_indices.append(modality)
+        input_indices.append(modality - 1)
+
+        modality_mask = torch.ones_like(modality)
+        input_mask.append(modality_mask)
+
+        # now generate the sequence
         input_indices = torch.cat(input_indices, dim=1)
+        input_mask = torch.cat(input_mask, dim=1).type(torch.bool)
+        assert input_indices.shape == input_mask.shape, f"{input_indices.shape} and {input_mask.shape} should have the same shape"
         if target is not None:
             target_indices = self.vqvae.index_quantize(target)
             target_indices = target_indices.flatten(1)
-            return input_indices, target_indices
+            return input_indices, input_mask, target_indices
         else:
-            return input_indices
+            return input_indices, input_mask
 
     def training_step(self, batch, batch_idx):
         imgs, input_contrasts, target, target_contrasts = self._prepare_input(
             batch)
-        input_indices, target_indices = self(
-            imgs, input_contrasts, target, target_contrasts)
+        with torch.no_grad():
+            input_indices, input_mask, target_indices = self(
+                imgs, input_contrasts, target, target_contrasts)
 
         # caculate the loss
         loss = self.maskgit(
-            input_indices, target_indices
+            input_indices, input_mask, target_indices
         )
 
         self.log('train/loss', loss, on_step=True, sync_dist=True,
@@ -138,11 +156,12 @@ class ContrastMaskGiT(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         imgs, input_contrasts, target, target_contrasts = self._prepare_input(
             batch)
-        input_indices, target_indices = self(
+        input_indices, input_mask, target_indices = self(
             imgs, input_contrasts, target, target_contrasts)
         generated_indices = self.maskgit.generate(
             num_tokens=target_indices.size(1),
             conditions=input_indices,
+            conditions_mask=input_mask,
             device=input_indices.device
         )
         last_indices = generated_indices[-1]
@@ -174,11 +193,12 @@ class ContrastMaskGiT(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         imgs, input_contrasts, target, target_contrasts = self._prepare_input(
             batch)
-        input_indices, target_indices = self(
+        input_indices, input_mask, target_indices = self(
             imgs, input_contrasts, target, target_contrasts)
         generated_indices = self.maskgit.generate(
             num_tokens=target_indices.size(1),
             conditions=input_indices,
+            conditions_mask=input_mask,
             device=input_indices.device
         )
         last_indices = generated_indices[-1]

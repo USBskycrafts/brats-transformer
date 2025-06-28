@@ -56,7 +56,7 @@ class TransformerEncoderModel(nn.Module):
         x += self.position_embedding[:, :seq_len, :]
 
         # Passing through the transformer blocks
-        hidden_state = self.transformer_encoder(x, mask=mask)
+        hidden_state = self.transformer_encoder(x, src_key_padding_mask=mask)
 
         # Projecting to the output space
         logits = self.out_proj(hidden_state)

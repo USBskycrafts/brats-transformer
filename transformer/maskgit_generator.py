@@ -116,7 +116,6 @@ class ContrastMaskGiT(pl.LightningModule):
                 seq_len + 1
             )
             input_mask.append(modality_mask)
-            # caculate the contrast embeddings
 
         # generate the target indices
         modality = target_contrasts + self.contrast_offset

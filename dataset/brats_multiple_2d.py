@@ -1,3 +1,4 @@
+import random
 import typing as t
 from pathlib import Path
 
@@ -70,19 +71,19 @@ class BraTS2021Dataset:
             transforms.CenterCrop(192),
         ])
 
-        input_modalities = torch.randint(
-            0,
-            len(self.modalites) + 1,
-            (len(self.modalites) - 1,)
-        )
-        target_modalities = torch.randint(
-            1,
-            len(self.modalites) + 1,
-            (1,)
-        )
+        idx_chosen = torch.randperm(len(self.modalites))
+        input_modalities = idx_chosen[:(len(self.modalites) - 1)]
+        target_modalities = idx_chosen[(len(self.modalites) - 1):]
 
-        source = modalities[:, :, input_modalities - 1]
-        target = modalities[:, :, target_modalities - 1]
+        source = modalities[:, :, input_modalities]
+        target = modalities[:, :, target_modalities]
+
+        mask_length = random.randint(1, len(self.modalites) - 1)
+        mask = [1] * mask_length \
+            + [0] * (len(self.modalites) - 1 - mask_length)
+
+        input_modalities = torch.tensor(mask) * (input_modalities + 1)
+        target_modalities = target_modalities + 1
 
         source = transform(source)
         target = transform(target)

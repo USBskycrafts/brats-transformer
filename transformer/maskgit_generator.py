@@ -147,7 +147,7 @@ class ContrastMaskGiT(pl.LightningModule):
         )
         last_indices = generated_indices[-1]
         latent_indices = last_indices.view(-1, *self.img_shape)
-        generated = self.vqvae.decode_samples(latent_indices)
+        generated = self.vqvae.decode_samples(latent_indices).clamp(-1, 1)
 
         psnr = PSNR(max_val=2.0)(generated, target)
         ssim = SSIM(spatial_dims=self.hparams.get('spatial_dims', 2),

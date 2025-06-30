@@ -63,7 +63,7 @@ class MaskGit(nn.Module):
             device=target_indices.device
         )
         target_padding_mask = torch.ones_like(target_indices)
-        padding_mask = torch.cat([
+        padding_mask = ~torch.cat([
             target_padding_mask, input_mask
         ], dim=1).type(torch.bool)
 
@@ -117,7 +117,7 @@ class MaskGit(nn.Module):
             (batch_size, num_tokens),
             device=conditions.device
         )
-        padding_mask = torch.cat(
+        padding_mask = ~torch.cat(
             [target_padding_mask, conditions_mask],
             dim=1
         ).type(torch.bool)

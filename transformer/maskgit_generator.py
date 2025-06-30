@@ -101,12 +101,19 @@ class ContrastMaskGiT(pl.LightningModule):
         input_indices = []
         input_mask = []
 
+        # generate the target contrast prompt
+        modality = target_contrasts + self.contrast_offset
+        input_indices.append(modality - 1)
+
+        modality_mask = torch.ones_like(modality)
+        input_mask.append(modality_mask)
+
         # generate the input indices
         for img, modality in zip(imgs, input_contrasts.split(1, dim=1)):
-            modality = modality + self.contrast_offset
-            input_indices.append(modality - 1)
             indices = self.vqvae.index_quantize(img)
             input_indices.append(indices.flatten(1))
+            modality = modality + self.contrast_offset
+            input_indices.append(modality - 1)
 
             # generate padding mask
             modality_mask = (modality != 0)
@@ -116,13 +123,6 @@ class ContrastMaskGiT(pl.LightningModule):
                 seq_len + 1
             )
             input_mask.append(modality_mask)
-
-        # generate the target indices
-        modality = target_contrasts + self.contrast_offset
-        input_indices.append(modality - 1)
-
-        modality_mask = torch.ones_like(modality)
-        input_mask.append(modality_mask)
 
         # now generate the sequence
         input_indices = torch.cat(input_indices, dim=1)

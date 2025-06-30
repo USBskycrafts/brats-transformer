@@ -1,8 +1,10 @@
 import math
 from typing import Sequence
 
+from einops import rearrange
 import pytorch_lightning as pl
 import torch
+import torch.nn.functional as F
 from monai.losses.perceptual import PerceptualLoss as LPIPS
 from monai.metrics.regression import PSNRMetric as PSNR
 from monai.metrics.regression import SSIMMetric as SSIM
@@ -11,6 +13,8 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from autoencoder.modules import VQVAE
 from transformer.maskgit import MaskGit
 from transformer.transformer import TransformerEncoderModel
+
+from transformers import Dinov2WithRegistersModel
 
 
 class ContrastMaskGiT(pl.LightningModule):
@@ -93,6 +97,12 @@ class ContrastMaskGiT(pl.LightningModule):
             mask_token_id=math.prod(levels),
         )
 
+        self.dinov2 = Dinov2WithRegistersModel.from_pretrained(
+            'facebook/dinov2-with-registers-base'
+        ).eval()
+        for p in self.dinov2.parameters():
+            p.requires_grad_(False)
+
         self.contrast_offset = math.prod(levels) + 1
         self.img_shape = [img_size] * \
             spatial_dims if isinstance(img_size, int) else img_size
@@ -114,31 +124,34 @@ class ContrastMaskGiT(pl.LightningModule):
         input_indices = torch.cat(input_indices, dim=1)
         if target is not None:
             target_indices = self.vqvae.index_quantize(target)
+            target_features = self._get_target_visual_tokens(target)
             target_indices = target_indices.flatten(1)
-            return input_indices, target_indices
+            return input_indices, target_indices, target_features
         else:
             return input_indices
 
     def training_step(self, batch, batch_idx):
         imgs, input_contrasts, target, target_contrasts = self._prepare_input(
             batch)
-        input_indices, target_indices = self(
+        input_indices, target_indices, target_features = self(
             imgs, input_contrasts, target, target_contrasts)
 
         # caculate the loss
-        loss = self.maskgit(
-            input_indices, target_indices
+        ce_loss, mse_loss = self.maskgit(
+            input_indices, target_indices, target_features
         )
 
-        self.log('train/loss', loss, on_step=True, sync_dist=True,
+        self.log('train/ce_loss', ce_loss, on_step=True, sync_dist=True,
                  on_epoch=True, prog_bar=True, logger=True)
-        return loss
+        self.log('train/mse_loss', mse_loss, on_step=True, sync_dist=True,
+                 on_epoch=True, prog_bar=True, logger=True)
+        return ce_loss + 0.5 * mse_loss
 
     @torch.no_grad()
     def validation_step(self, batch, batch_idx):
         imgs, input_contrasts, target, target_contrasts = self._prepare_input(
             batch)
-        input_indices, target_indices = self(
+        input_indices, target_indices, target_features = self(
             imgs, input_contrasts, target, target_contrasts)
         generated_indices = self.maskgit.generate(
             num_tokens=target_indices.size(1),
@@ -174,7 +187,7 @@ class ContrastMaskGiT(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         imgs, input_contrasts, target, target_contrasts = self._prepare_input(
             batch)
-        input_indices, target_indices = self(
+        input_indices, target_indices, target_features = self(
             imgs, input_contrasts, target, target_contrasts)
         generated_indices = self.maskgit.generate(
             num_tokens=target_indices.size(1),
@@ -238,3 +251,24 @@ class ContrastMaskGiT(pl.LightningModule):
         target_contrasts = target_contrasts.to(self.device)
         target = target.to(self.device)
         return imgs, input_contrasts, target, target_contrasts
+
+    @torch.no_grad()
+    def _get_target_visual_tokens(self, target_img):
+        target_img_3c = target_img.repeat(1, 3, 1, 1)
+        patch_size = self.dinov2.config.patch_size
+        img_size = 224
+        patch_num = img_size // patch_size
+        target_img_3c = F.interpolate(
+            target_img_3c,
+            (img_size, img_size)
+        )
+        target_img_features = self.dinov2(
+            pixel_values=target_img_3c
+        ).last_hidden_state[:, :patch_num ** 2]
+        target_img_features = rearrange(
+            target_img_features,
+            'b (h w) d -> b d h w',
+            h=patch_num,
+            w=patch_num
+        )
+        return target_img_features

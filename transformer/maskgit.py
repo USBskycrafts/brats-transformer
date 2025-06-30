@@ -49,7 +49,6 @@ class MaskGit(nn.Module):
         self,
         input_indices: torch.Tensor,
         target_indices: torch.Tensor,
-        target_features: torch.Tensor
     ):
         """
         Args:
@@ -79,14 +78,6 @@ class MaskGit(nn.Module):
             )
         )
 
-        target_embed = self.transformer.embedding(
-            target_indices
-        )
-        mse_loss = self._distill_from_pretrained(
-            target_embed,
-            target_features
-        )
-
         target_logits = logits[:, -target_indices.size(1):]
         target_logits = target_logits[~target_mask, :]
         target_indices = target_indices[~target_mask]
@@ -94,7 +85,7 @@ class MaskGit(nn.Module):
             target_logits,
             target_indices
         )
-        return ce_loss, mse_loss
+        return ce_loss
 
     @torch.no_grad()
     def generate(
@@ -251,20 +242,3 @@ class MaskGit(nn.Module):
         update_mask[batch_indices, top_indices] = False
 
         return update_mask
-
-    def _distill_from_pretrained(self, target_embed, target_features):
-        patch_num = int(target_embed.size(1) ** 0.5)
-        target_embed = rearrange(
-            target_embed,
-            'b (h w) d -> b d h w',
-            h=patch_num,
-            w=patch_num
-        )
-        target_embed_inter = F.interpolate(
-            target_embed,
-            target_features.shape[2:]
-        )
-        return F.mse_loss(
-            target_embed_inter,
-            target_features
-        )

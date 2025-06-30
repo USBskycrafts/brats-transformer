@@ -136,16 +136,24 @@ class ContrastMaskGiT(pl.LightningModule):
         input_indices, target_indices, target_features = self(
             imgs, input_contrasts, target, target_contrasts)
 
+        target_embed = self.transformer.embedding(
+            target_indices
+        )
+        mse_loss = self._distill_from_pretrained(
+            target_embed,
+            target_features
+        )
+
         # caculate the loss
-        ce_loss, mse_loss = self.maskgit(
-            input_indices, target_indices, target_features
+        ce_loss = self.maskgit(
+            input_indices, target_indices
         )
 
         self.log('train/ce_loss', ce_loss, on_step=True, sync_dist=True,
                  on_epoch=True, prog_bar=True, logger=True)
         self.log('train/mse_loss', mse_loss, on_step=True, sync_dist=True,
                  on_epoch=True, prog_bar=True, logger=True)
-        return ce_loss + 0.5 * mse_loss
+        return ce_loss + 10 * mse_loss
 
     @torch.no_grad()
     def validation_step(self, batch, batch_idx):
@@ -229,10 +237,10 @@ class ContrastMaskGiT(pl.LightningModule):
         # 添加 transformer 参数
         params_to_optimize.extend(self.transformer.parameters())
 
-        optimizer = torch.optim.Adam(
+        optimizer = torch.optim.AdamW(
             params_to_optimize,
             lr=self.hparams.get('lr', 1.0e-4),
-            betas=(0.9, 0.96)
+            betas=(0.9, 0.95)
         )
         return [optimizer], []
     # -------------------------------------------------------------------
@@ -272,3 +280,20 @@ class ContrastMaskGiT(pl.LightningModule):
             w=patch_num
         )
         return target_img_features
+
+    def _distill_from_pretrained(self, target_embed, target_features):
+        patch_num = int(target_embed.size(1) ** 0.5)
+        target_embed = rearrange(
+            target_embed,
+            'b (h w) d -> b d h w',
+            h=patch_num,
+            w=patch_num
+        )
+        target_embed_inter = F.interpolate(
+            target_embed,
+            target_features.shape[2:]
+        )
+        return F.mse_loss(
+            target_embed_inter,
+            target_features
+        )

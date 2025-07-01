@@ -98,8 +98,8 @@ class ContrastMaskGiT(pl.LightningModule):
         )
 
         self.visual_proj = nn.Linear(
-            embedding_dim,
-            hidden_size
+            hidden_size,
+            embedding_dim
         )
 
         self.contrast_offset = math.prod(levels) + 1
@@ -158,8 +158,8 @@ class ContrastMaskGiT(pl.LightningModule):
 
         embeds = self.transformer.embedding(target_indices)
         mse_loss = F.mse_loss(
-            embeds,
-            self.visual_proj(target_features)
+            self.visual_proj(embeds),
+            target_features
         )
 
         # caculate the loss

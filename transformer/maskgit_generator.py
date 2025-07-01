@@ -1,8 +1,11 @@
 import math
 from typing import Sequence
 
+from einops import rearrange
 import pytorch_lightning as pl
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 from monai.losses.perceptual import PerceptualLoss as LPIPS
 from monai.metrics.regression import PSNRMetric as PSNR
 from monai.metrics.regression import SSIMMetric as SSIM
@@ -93,6 +96,11 @@ class ContrastMaskGiT(pl.LightningModule):
             mask_token_id=math.prod(levels),
         )
 
+        self.visual_proj = nn.Linear(
+            embedding_dim,
+            hidden_size
+        )
+
         self.contrast_offset = math.prod(levels) + 1
         self.img_shape = [img_size] * \
             spatial_dims if isinstance(img_size, int) else img_size
@@ -131,7 +139,12 @@ class ContrastMaskGiT(pl.LightningModule):
         if target is not None:
             target_indices = self.vqvae.index_quantize(target)
             target_indices = target_indices.flatten(1)
-            return input_indices, input_mask, target_indices
+            target_features = self.vqvae.encode_stage_2_inputs(target)
+            target_features = rearrange(
+                target_features,
+                'b c h w -> b (h w) c'
+            )
+            return input_indices, input_mask, target_indices, target_features
         else:
             return input_indices, input_mask
 
@@ -139,23 +152,31 @@ class ContrastMaskGiT(pl.LightningModule):
         imgs, input_contrasts, target, target_contrasts = self._prepare_input(
             batch)
         with torch.no_grad():
-            input_indices, input_mask, target_indices = self(
+            input_indices, input_mask, target_indices, target_features = self(
                 imgs, input_contrasts, target, target_contrasts)
 
+        embeds = self.transformer.embedding(target_indices)
+        mse_loss = F.mse_loss(
+            embeds,
+            self.visual_proj(target_features)
+        )
+
         # caculate the loss
-        loss = self.maskgit(
+        ce_loss = self.maskgit(
             input_indices, input_mask, target_indices
         )
 
-        self.log('train/loss', loss, on_step=True, sync_dist=True,
+        self.log('train/ce_loss', ce_loss, on_step=True, sync_dist=True,
                  on_epoch=True, prog_bar=True, logger=True)
-        return loss
+        self.log('train/mse_loss', mse_loss, on_step=True, sync_dist=True,
+                 on_epoch=True, prog_bar=True, logger=True)
+        return ce_loss + 0.5 * mse_loss
 
     @torch.no_grad()
     def validation_step(self, batch, batch_idx):
         imgs, input_contrasts, target, target_contrasts = self._prepare_input(
             batch)
-        input_indices, input_mask, target_indices = self(
+        input_indices, input_mask, target_indices, *_ = self(
             imgs, input_contrasts, target, target_contrasts)
         generated_indices = self.maskgit.generate(
             num_tokens=target_indices.size(1),
@@ -192,7 +213,7 @@ class ContrastMaskGiT(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         imgs, input_contrasts, target, target_contrasts = self._prepare_input(
             batch)
-        input_indices, input_mask, target_indices = self(
+        input_indices, input_mask, target_indices, *_ = self(
             imgs, input_contrasts, target, target_contrasts)
         generated_indices = self.maskgit.generate(
             num_tokens=target_indices.size(1),
@@ -238,7 +259,7 @@ class ContrastMaskGiT(pl.LightningModule):
         optimizer = torch.optim.Adam(
             params_to_optimize,
             lr=self.hparams.get('lr', 1.0e-4),
-            betas=(0.9, 0.96)
+            betas=(0.9, 0.95)
         )
         return [optimizer], []
     # -------------------------------------------------------------------

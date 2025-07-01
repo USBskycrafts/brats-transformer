@@ -180,8 +180,8 @@ class MaskGit(nn.Module):
         device: torch.device
     ):
         mask = torch.rand(shape, device=device) < mask_ratio
-        if mask.sum() == 0:
-            mask[:, random.randint(0, shape[1] - 1)] = True
+        if ~mask.sum() == 0:
+            mask[:, random.randint(0, shape[1] - 1)] = False
         return mask
 
     def _compute_unmask_count(

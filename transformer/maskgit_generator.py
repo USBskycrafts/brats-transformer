@@ -1,11 +1,12 @@
 import math
-from typing import Sequence
+from typing import Sequence, Union, Dict
 
 from einops import rearrange
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.optim import Optimizer
 from monai.losses.perceptual import PerceptualLoss as LPIPS
 from monai.metrics.regression import PSNRMetric as PSNR
 from monai.metrics.regression import SSIMMetric as SSIM
@@ -249,7 +250,7 @@ class ContrastMaskGiT(pl.LightningModule):
             'target': target,
         }
 
-    def configure_optimizers(self):
+    def configure_optimizers(self):  # type: ignore
         # 收集所有需要优化的参数
         params_to_optimize = []
 
@@ -261,7 +262,19 @@ class ContrastMaskGiT(pl.LightningModule):
             lr=self.hparams.get('lr', 1.0e-4),
             betas=(0.9, 0.95)
         )
-        return [optimizer], []
+
+        warmup_scheduler = torch.optim.lr_scheduler.LambdaLR(
+            optimizer,
+            lambda step: min(step / 2000, 1.0)
+        )
+
+        return {
+            'optimizer': optimizer,
+            'lr_scheduler': {
+                'scheduler': warmup_scheduler,
+                'interval': 'step'
+            }
+        }
     # -------------------------------------------------------------------
     # private methods
 

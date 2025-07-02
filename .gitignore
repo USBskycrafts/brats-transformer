@@ -4,3 +4,4 @@
 **/*.pyc
 **/__pycache__/
 config/local*
+**/.lr_find*

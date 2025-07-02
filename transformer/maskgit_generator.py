@@ -140,7 +140,7 @@ class ContrastMaskGiT(pl.LightningModule):
         if target is not None:
             target_indices = self.vqvae.index_quantize(target)
             target_indices = target_indices.flatten(1)
-            target_features = self.vqvae.encode_stage_2_inputs(target)
+            target_features = self.vqvae.encode(target)
             target_features = rearrange(
                 target_features,
                 'b c h w -> b (h w) c'

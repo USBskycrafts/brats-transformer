@@ -28,6 +28,7 @@ class MaskGit(nn.Module):
     mask_token_id: int
     vocab_size: int
     schedule: str
+    noise_prob: float
 
     def __init__(
         self,
@@ -35,12 +36,14 @@ class MaskGit(nn.Module):
         mask_token_id: int,
         vocab_size: int,
         schedule: str = "cosine",
+        noise_prob: float = 0.15,
     ):
         super().__init__()
         self.transformer = transformer
         self.mask_token_id = mask_token_id
         self.vocab_size = vocab_size
         self.schedule = schedule
+        self.noise_prob = noise_prob
 
     def forward(
         self,
@@ -66,6 +69,12 @@ class MaskGit(nn.Module):
         padding_mask = ~torch.cat([
             target_padding_mask, input_mask
         ], dim=1).type(torch.bool)
+
+        target_indices = self._add_noise_random_replace(
+            target_indices,
+            self.vocab_size,
+            self.noise_prob
+        )
 
         # generate the masked input indices
         masked_indices = target_indices.where(
@@ -254,3 +263,16 @@ class MaskGit(nn.Module):
         update_mask[batch_indices, top_indices] = False
 
         return update_mask
+
+    def _add_noise_random_replace(self, input_ids, vocab_size, noise_prob=0.15):
+        # create noise mask (positions to be noised)
+        noise_mask = torch.rand(
+            input_ids.shape, device=input_ids.device) < noise_prob
+
+        # generate random tokens (covering full input shape)
+        random_tokens = torch.randint(
+            0, vocab_size, input_ids.shape, device=input_ids.device)
+
+        # apply replacement: noise positions get random tokens, others stay original
+        noisy_inputs = torch.where(noise_mask, random_tokens, input_ids)
+        return noisy_inputs

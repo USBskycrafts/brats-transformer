@@ -70,14 +70,14 @@ class MaskGit(nn.Module):
             target_padding_mask, input_mask
         ], dim=1).type(torch.bool)
 
-        target_indices = self._add_noise_random_replace(
+        masked_indices = self._add_noise_random_replace(
             target_indices,
             self.vocab_size,
             self.noise_prob
         )
 
         # generate the masked input indices
-        masked_indices = target_indices.where(
+        masked_indices = masked_indices.where(
             target_mask,
             self.mask_token_id
         )
@@ -189,7 +189,7 @@ class MaskGit(nn.Module):
         device: torch.device
     ):
         mask = torch.rand(shape, device=device) < mask_ratio
-        if ~mask.sum() == 0:
+        if (~mask).sum() == 0:
             mask[:, random.randint(0, shape[1] - 1)] = False
         return mask
 

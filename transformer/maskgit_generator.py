@@ -257,10 +257,10 @@ class ContrastMaskGiT(pl.LightningModule):
         # 添加 transformer 参数
         params_to_optimize.extend(self.transformer.parameters())
 
-        optimizer = torch.optim.Adam(
+        optimizer = torch.optim.AdamW(
             params_to_optimize,
             lr=self.hparams.get('lr', 1.0e-4),
-            betas=(0.9, 0.95)
+            betas=(0.9, 0.95),
         )
 
         warmup_scheduler = torch.optim.lr_scheduler.LambdaLR(

@@ -265,12 +265,17 @@ class ContrastMaskGiT(pl.LightningModule):
             params_to_optimize,
             lr=self.hparams.get('lr', 1.0e-4),
             betas=(0.9, 0.95),
+            weight_decay=0.05
         )
         scheduler = OneCycleLR(
             optimizer,
             max_lr=self.hparams.get('lr', 1e-3),
             total_steps=int(self.trainer.estimated_stepping_batches),
-            cycle_momentum=False,
+            pct_start=0.2,
+            base_momentum=0.7,
+            max_momentum=0.8,
+            div_factor=10,
+            final_div_factor=1e7
         )
         return {
             'optimizer': optimizer,

@@ -51,6 +51,7 @@ class ContrastMaskGiT(pl.LightningModule):
                  num_layers: int = 12,
                  num_heads: int = 8,
                  lr=1.0e-4,
+                 mse_weight=10
                  ):
         super().__init__()
         self.save_hyperparameters()
@@ -97,9 +98,12 @@ class ContrastMaskGiT(pl.LightningModule):
             mask_token_id=math.prod(levels),
         )
 
-        self.visual_proj = nn.Linear(
-            hidden_size,
-            embedding_dim
+        self.visual_proj = nn.Sequential(
+            nn.LayerNorm(hidden_size),
+            nn.Linear(hidden_size, hidden_size),
+            nn.GELU(),
+            nn.LayerNorm(hidden_size),
+            nn.Linear(hidden_size, embedding_dim)
         )
 
         self.contrast_offset = math.prod(levels) + 1
@@ -171,7 +175,7 @@ class ContrastMaskGiT(pl.LightningModule):
                  on_epoch=True, prog_bar=True, logger=True)
         self.log('train/mse_loss', mse_loss, on_step=True, sync_dist=True,
                  on_epoch=True, prog_bar=True, logger=True)
-        return ce_loss + 0.5 * mse_loss
+        return ce_loss + mse_loss * self.hparams.get('mse_weight', 10)
 
     @torch.no_grad()
     def validation_step(self, batch, batch_idx):

@@ -66,9 +66,9 @@ class MaskGit(nn.Module):
             device=target_indices.device
         )
         target_padding_mask = torch.ones_like(target_indices)
-        padding_mask = ~torch.cat([
+        padding_mask = ~(torch.cat([
             target_padding_mask, input_mask
-        ], dim=1).type(torch.bool)
+        ], dim=1).type(torch.bool))
 
         masked_indices = self._add_noise_random_replace(
             target_indices,

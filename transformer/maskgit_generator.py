@@ -10,7 +10,7 @@ from torch.optim import Optimizer
 from monai.losses.perceptual import PerceptualLoss as LPIPS
 from monai.metrics.regression import PSNRMetric as PSNR
 from monai.metrics.regression import SSIMMetric as SSIM
-from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.optim.lr_scheduler import OneCycleLR
 
 from autoencoder.modules import VQVAE
 from transformer.maskgit import MaskGit
@@ -266,17 +266,18 @@ class ContrastMaskGiT(pl.LightningModule):
             lr=self.hparams.get('lr', 1.0e-4),
             betas=(0.9, 0.95),
         )
-
-        warmup_scheduler = torch.optim.lr_scheduler.LambdaLR(
+        scheduler = OneCycleLR(
             optimizer,
-            lambda step: min(step / 2000, 1.0)
+            max_lr=self.hparams.get('lr', 1e-3),
+            total_steps=int(self.trainer.estimated_stepping_batches),
+            cycle_momentum=False,
         )
-
         return {
             'optimizer': optimizer,
             'lr_scheduler': {
-                'scheduler': warmup_scheduler,
-                'interval': 'step'
+                'scheduler': scheduler,
+                'interval': 'step',
+                'frequency': 1
             }
         }
     # -------------------------------------------------------------------

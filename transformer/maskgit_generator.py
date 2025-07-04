@@ -89,6 +89,9 @@ class ContrastMaskGiT(pl.LightningModule):
             num_heads=num_heads,
             num_embeddings=vocab_size,
         )
+        self.transformer.apply(
+            self._init_weights
+        )
 
         self.maskgit = MaskGit(
             transformer=self.transformer,
@@ -317,3 +320,8 @@ class ContrastMaskGiT(pl.LightningModule):
         target_contrasts = target_contrasts.to(self.device)
         target = target.to(self.device)
         return imgs, input_contrasts, target, target_contrasts
+
+    def _init_weights(self, module):
+        classname = module.__class__.__name__
+        if "Linear" in classname or "Embedding" == classname:
+            nn.init.trunc_normal_(module.weight.data, 0.0, 0.02)

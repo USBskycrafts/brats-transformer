@@ -178,7 +178,7 @@ class ContrastMaskGiT(pl.LightningModule):
 
         ce_weight = torch.autograd.grad(
             ce_loss,
-            list(self.transformer.out_proj.parameters())[-1],
+            self.transformer.embedding.weight,
             retain_graph=True
         )[0]
 
@@ -189,6 +189,8 @@ class ContrastMaskGiT(pl.LightningModule):
                  on_epoch=True, prog_bar=True, logger=True)
         self.log('train/mse_loss', mse_loss, on_step=True, sync_dist=True,
                  on_epoch=True, prog_bar=True, logger=True)
+        self.log('train/weight', weight, on_step=True,
+                 prog_bar=False, logger=True, sync_dist=True)
         return ce_loss + mse_loss * weight
 
     @torch.no_grad()
